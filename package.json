@@ -1,0 +1,19 @@
+{
+  "name": "water-tracker-bot",
+  "version": "1.0.0",
+  "description": "Telegram bot for tracking daily water intake",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "nodemon index.js"
+  },
+  "dependencies": {
+    "node-telegram-bot-api": "^0.61.0",
+    "sqlite3": "^5.1.6",
+    "node-schedule": "^2.1.1",
+    "dotenv": "^16.3.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  }
+}
