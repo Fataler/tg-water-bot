@@ -15,7 +15,7 @@ Telegram бот для отслеживания потребления воды 
 
 1. Клонируйте репозиторий:
 ```bash
-git clone [url репозитория]
+git clone https://github.com/Fataler/tg-water-bot.git
 ```
 
 2. Установите зависимости:
