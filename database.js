@@ -1,5 +1,5 @@
 const sqlite3 = require('sqlite3').verbose();
-const db = new sqlite3.Database('water_tracker.db');
+const db = new sqlite3.Database(process.env.DB_PATH || 'water_tracker.db');
 
 // Инициализация базы данных
 function initDatabase() {

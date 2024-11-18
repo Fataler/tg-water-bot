@@ -2,13 +2,47 @@ require('dotenv').config();
 const TelegramBot = require('node-telegram-bot-api');
 const schedule = require('node-schedule');
 const db = require('./database');
+const express = require('express');
+const fetch = require('node-fetch');
 
+const app = express();
+const port = process.env.PORT || 3000;
 const bot = new TelegramBot(process.env.BOT_TOKEN, { polling: true });
 
-// Инициализация базы данных
 db.initDatabase();
 
-// Клавиатуры
+app.get('/', (req, res) => {
+    res.send('Bot is alive!');
+});
+
+app.listen(port, () => {
+    console.log(`Server is running on port ${port}`);
+});
+
+function setupSelfPing() {
+    const PING_INTERVAL = 4 * 60 * 1000;
+    const RANDOM_OFFSET = 30 * 1000;
+
+    setInterval(() => {
+        const randomDelay = Math.floor(Math.random() * RANDOM_OFFSET);
+        setTimeout(async () => {
+            try {
+                const appUrl = process.env.APP_URL;
+                if (appUrl) {
+                    const response = await fetch(appUrl);
+                    console.log('Self-ping successful:', response.status);
+                }
+            } catch (error) {
+                console.error('Self-ping failed:', error.message);
+            }
+        }, randomDelay);
+    }, PING_INTERVAL);
+}
+
+if (process.env.APP_URL) {
+    setupSelfPing();
+}
+
 const mainKeyboard = {
     reply_markup: {
         keyboard: [
@@ -34,7 +68,6 @@ const waterAmountKeyboard = {
     }
 };
 
-// Клавиатура для выбора цели
 const goalKeyboard = {
     reply_markup: {
         inline_keyboard: [
@@ -51,7 +84,6 @@ const goalKeyboard = {
     }
 };
 
-// Создаем клавиатуру с временем
 function createTimeKeyboard() {
     const keyboard = [];
     let row = [];
@@ -76,7 +108,6 @@ function createTimeKeyboard() {
     };
 }
 
-// Статистика за разные периоды
 const statsKeyboard = {
     reply_markup: {
         inline_keyboard: [
@@ -92,10 +123,8 @@ const statsKeyboard = {
     }
 };
 
-// Временное хранилище для пользовательских данных
 const userTemp = new Map();
 
-// Обработка команды /start
 bot.onText(/\/start/, async (msg) => {
     const chatId = msg.chat.id;
     const user = await db.getUser(chatId);
@@ -116,7 +145,6 @@ bot.onText(/\/start/, async (msg) => {
     }
 });
 
-// Обработка команды /reset
 bot.onText(/\/reset/, async (msg) => {
     const chatId = msg.chat.id;
     const confirmKeyboard = {
@@ -132,13 +160,11 @@ bot.onText(/\/reset/, async (msg) => {
     await bot.sendMessage(chatId, 'Вы уверены, что хотите сбросить все настройки?', confirmKeyboard);
 });
 
-// Обработка добавления воды
 bot.onText(/💧 Добавить воду/, async (msg) => {
     const chatId = msg.chat.id;
     await bot.sendMessage(chatId, 'Сколько воды ты выпил(а)?', waterAmountKeyboard);
 });
 
-// Обработка нажатий на инлайн кнопки
 bot.on('callback_query', async (query) => {
     const chatId = query.message.chat.id;
     const data = query.data;
@@ -181,7 +207,7 @@ bot.on('callback_query', async (query) => {
             mainKeyboard
         );
         await bot.deleteMessage(chatId, query.message.message_id);
-        userTemp.delete(chatId); // Очищаем временные данные
+        userTemp.delete(chatId); 
     } else if (data.startsWith('water_')) {
         const amount = data.split('_')[1];
         if (amount === 'custom') {
@@ -195,12 +221,10 @@ bot.on('callback_query', async (query) => {
                 await addWaterIntake(chatId, customAmount);
             });
         } else if (amount === 'add') {
-            // Обработка кнопки "Добавить воду" из уведомления
             await bot.sendMessage(chatId, 'Сколько воды ты выпил(а)?', waterAmountKeyboard);
         } else {
             await addWaterIntake(chatId, parseFloat(amount));
         }
-        // Удаляем сообщение с кнопками после выбора
         if (query.message) {
             await bot.deleteMessage(chatId, query.message.message_id);
         }
@@ -233,7 +257,6 @@ bot.on('callback_query', async (query) => {
                 chatId,
                 `Уведомления ${status ? 'отключены' : 'включены'}.`
             );
-            // Обновляем настройки
             const user = await db.getUser(chatId);
             const settingsKeyboard = createSettingsKeyboard(user);
             await bot.editMessageReplyMarkup(
@@ -248,7 +271,6 @@ bot.on('callback_query', async (query) => {
         if (data === 'dnd_today') {
             await db.updateDoNotDisturb(chatId, true);
             await bot.sendMessage(chatId, 'Напоминания отключены до конца дня.');
-            // Устанавливаем таймер на сброс статуса в полночь
             const now = new Date();
             const tomorrow = new Date(now);
             tomorrow.setDate(tomorrow.getDate() + 1);
@@ -265,7 +287,6 @@ bot.on('callback_query', async (query) => {
     }
 });
 
-// Функция создания клавиатуры настроек
 function createSettingsKeyboard(user) {
     return {
         reply_markup: {
@@ -281,7 +302,6 @@ function createSettingsKeyboard(user) {
     };
 }
 
-// Обработка настроек
 bot.onText(/⚙️ Настройки/, async (msg) => {
     const chatId = msg.chat.id;
     const user = await db.getUser(chatId);
@@ -293,9 +313,7 @@ bot.onText(/⚙️ Настройки/, async (msg) => {
     );
 });
 
-// Функция добавления воды с валидацией
 async function addWaterIntake(chatId, amount) {
-    // Проверка на отрицательные значения и максимальное количество
     if (amount <= 0) {
         await bot.sendMessage(chatId, 'Количество воды должно быть больше 0.');
         return;
@@ -311,7 +329,6 @@ async function addWaterIntake(chatId, amount) {
         const dailyTotal = await db.getDailyWaterIntake(chatId, today);
         const user = await db.getUser(chatId);
 
-        // Создаем прогресс-бар
         const progressPercentage = Math.min((dailyTotal / user.daily_goal) * 100, 100);
         const progressBarLength = 20;
         const filledLength = Math.floor((progressPercentage * progressBarLength) / 100);
@@ -334,7 +351,6 @@ async function addWaterIntake(chatId, amount) {
     }
 }
 
-// Функция показа статистики
 async function showStats(chatId, period) {
     const user = await db.getUser(chatId);
     let history;
@@ -396,7 +412,6 @@ async function showStats(chatId, period) {
     }
 }
 
-// Форматирование сообщения с историей
 async function formatHistoryMessage(title, history) {
     let message = `${title}\n\n`;
     let totalAmount = 0;
@@ -421,13 +436,11 @@ async function formatHistoryMessage(title, history) {
     return message;
 }
 
-// Обработка статистики
 bot.onText(/📊 Статистика/, async (msg) => {
     const chatId = msg.chat.id;
     await bot.sendMessage(chatId, 'Выберите период:', statsKeyboard);
 });
 
-// Настройка напоминаний
 function scheduleReminders() {
     schedule.scheduleJob('0 * * * *', async () => {
         const now = new Date();
@@ -466,7 +479,6 @@ function scheduleReminders() {
 
 scheduleReminders();
 
-// Обработка ошибок
 bot.on('polling_error', (error) => {
     console.error('Ошибка в боте:', error);
 });
