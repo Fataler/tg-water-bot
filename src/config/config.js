@@ -6,7 +6,7 @@ module.exports = {
         options: { polling: true }
     },
     database: {
-        path: process.env.DB_PATH || 'water_tracker.db'
+        path: process.env.DB_PATH || 'data/water_bot.db'
     },
     server: {
         port: process.env.PORT || 3000,
@@ -14,7 +14,8 @@ module.exports = {
     },
     notifications: {
         retryAttempts: 3,
-        retryDelay: 1000
+        retryDelay: 1000,
+        defaultTime: '12:00'
     },
     validation: {
         water: {

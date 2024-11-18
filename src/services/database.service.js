@@ -1,5 +1,7 @@
 const Database = require('better-sqlite3');
 const path = require('path');
+const fs = require('fs');
+const config = require('../config/config');
 
 class DatabaseService {
     constructor() {
@@ -8,7 +10,16 @@ class DatabaseService {
 
     async init() {
         try {
-            this.db = new Database(path.join(__dirname, '../../data/water_bot.db'));
+            const dbPath = path.join(__dirname, '../../', config.database.path);
+            const dbDir = path.dirname(dbPath);
+            
+            // Create directory if it doesn't exist
+            if (!fs.existsSync(dbDir)) {
+                fs.mkdirSync(dbDir, { recursive: true });
+                console.log('Создана директория для базы данных:', dbDir);
+            }
+
+            this.db = new Database(dbPath);
             await this.createTables();
             console.log('База данных успешно инициализирована');
         } catch (error) {
