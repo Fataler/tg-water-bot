@@ -10,24 +10,25 @@ class CallbackHandler {
         this.userTemp = new Map();
     }
 
+    handlers = {
+        goal: () => this.handleGoalCallback(chatId, data),
+        water: () => this.handleWaterCallback(chatId, data),
+        stats: () => this.handleStatsCallback(chatId, data),
+        settings: () => this.handleSettingsCallback(chatId, data),
+        time: () => this.handleTimeCallback(chatId, data),
+        reset: () => this.handleResetCallback(chatId, data),
+    };
+
     async handleCallback(query) {
         const chatId = query.message.chat.id;
         const messageId = query.message.message_id;
         const data = query.data;
 
         try {
-            if (data.startsWith('goal_')) {
-                await this.handleGoalCallback(chatId, data);
-            } else if (data.startsWith('water_')) {
-                await this.handleWaterCallback(chatId, data);
-            } else if (data.startsWith('stats_')) {
-                await this.handleStatsCallback(chatId, data);
-            } else if (data.startsWith('settings_')) {
-                await this.handleSettingsCallback(chatId, data);
-            } else if (data.startsWith('time_')) {
-                await this.handleTimeCallback(chatId, data);
-            } else if (data.startsWith('reset_')) {
-                await this.handleResetCallback(chatId, data);
+            const handlerName = data.split('_')[0];
+
+            if (handlers[handlerName]) {
+                await handlers[handlerName]();
             }
 
             // Отвечаем на callback query, чтобы убрать часики
