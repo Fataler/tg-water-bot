@@ -11,12 +11,14 @@ class CallbackHandler {
     }
 
     handlers = {
-        goal: () => this.handleGoalCallback(chatId, data),
-        water: () => this.handleWaterCallback(chatId, data),
-        stats: () => this.handleStatsCallback(chatId, data),
-        settings: () => this.handleSettingsCallback(chatId, data),
-        time: () => this.handleTimeCallback(chatId, data),
-        reset: () => this.handleResetCallback(chatId, data),
+        goal: (chatId, data) => this.handleGoalCallback(chatId, data),
+        water: (chatId, data) => this.handleWaterCallback(chatId, data),
+        other: (chatId, data) => this.handleOtherDrinkCallback(chatId, data),
+        drink: (chatId, data) => this.handleDrinkTypeCallback(chatId, data),
+        stats: (chatId, data) => this.handleStatsCallback(chatId, data),
+        settings: (chatId, data) => this.handleSettingsCallback(chatId, data),
+        time: (chatId, data) => this.handleTimeCallback(chatId, data),
+        reset: (chatId, data) => this.handleResetCallback(chatId, data)
     };
 
     async handleCallback(query) {
@@ -27,8 +29,8 @@ class CallbackHandler {
         try {
             const handlerName = data.split('_')[0];
 
-            if (handlers[handlerName]) {
-                await handlers[handlerName]();
+            if (this.handlers[handlerName]) {
+                await this.handlers[handlerName](chatId, data);
             }
 
             // Отвечаем на callback query, чтобы убрать часики
@@ -75,14 +77,67 @@ class CallbackHandler {
         const amount = data.split('_')[1];
         
         if (amount === 'custom') {
-            await telegramService.sendMessage(chatId, 'Введите количество воды в литрах (например: 0.5):');
+            await telegramService.sendMessage(chatId, 'Введите количество в литрах (например: 0.5):');
             this.userTemp.set(chatId, { waitingFor: 'custom_water' });
             return;
         }
 
         const numAmount = parseFloat(amount);
-        if (ValidationUtil.isValidWaterAmount(numAmount)) {
-            await this.addWaterIntake(chatId, numAmount);
+        if (!ValidationUtil.isValidAmount(numAmount)) {
+            await telegramService.sendMessage(chatId, 'Некорректное количество. Попробуйте еще раз.');
+            return;
+        }
+
+        try {
+            await dbService.addWaterIntake(chatId, numAmount, 'water');
+            const dailyIntake = await dbService.getDailyWaterIntake(chatId);
+            const user = await dbService.getUser(chatId);
+            const goal = user.daily_goal;
+            
+            await telegramService.sendMessage(
+                chatId,
+                `✅ Добавлено ${numAmount}л воды!\n\n` +
+                `💧 Вода: ${dailyIntake.water}л\n` +
+                `🥤 Другие напитки: ${dailyIntake.other}л\n` +
+                `📊 Всего: ${dailyIntake.total}л из ${goal}л`
+            );
+        } catch (error) {
+            console.error('Error adding water:', error);
+            await telegramService.sendMessage(chatId, 'Произошла ошибка. Попробуйте еще раз.');
+        }
+    }
+
+    async handleOtherDrinkCallback(chatId, data) {
+        const amount = data.split('_')[1];
+        
+        if (amount === 'custom') {
+            await telegramService.sendMessage(chatId, 'Введите количество в литрах (например: 0.5):');
+            this.userTemp.set(chatId, { waitingFor: 'custom_other' });
+            return;
+        }
+
+        const numAmount = parseFloat(amount);
+        if (!ValidationUtil.isValidAmount(numAmount)) {
+            await telegramService.sendMessage(chatId, 'Некорректное количество. Попробуйте еще раз.');
+            return;
+        }
+
+        try {
+            await dbService.addWaterIntake(chatId, numAmount, 'other');
+            const dailyIntake = await dbService.getDailyWaterIntake(chatId);
+            const user = await dbService.getUser(chatId);
+            const goal = user.daily_goal;
+            
+            await telegramService.sendMessage(
+                chatId,
+                `✅ Добавлено ${numAmount}л другого напитка!\n\n` +
+                `💧 Вода: ${dailyIntake.water}л\n` +
+                `🥤 Другие напитки: ${dailyIntake.other}л\n` +
+                `📊 Всего: ${dailyIntake.total}л из ${goal}л`
+            );
+        } catch (error) {
+            console.error('Error adding other drink:', error);
+            await telegramService.sendMessage(chatId, 'Произошла ошибка. Попробуйте еще раз.');
         }
     }
 
@@ -159,6 +214,24 @@ class CallbackHandler {
         }
     }
 
+    async handleDrinkTypeCallback(chatId, data) {
+        const type = data.split('_')[1];
+        
+        if (type === 'water') {
+            await telegramService.sendMessage(
+                chatId,
+                'Сколько воды ты выпил(а)?',
+                KeyboardUtil.getWaterAmountKeyboard()
+            );
+        } else if (type === 'other') {
+            await telegramService.sendMessage(
+                chatId,
+                'Сколько другого напитка ты выпил(а)?',
+                KeyboardUtil.getOtherDrinkAmountKeyboard()
+            );
+        }
+    }
+
     async addWaterIntake(chatId, amount) {
         try {
             await dbService.addWaterIntake(chatId, amount);
@@ -191,7 +264,7 @@ class CallbackHandler {
 
             switch (period) {
                 case 'today':
-                    stats = await dbService.getDailyWaterIntake(chatId, new Date());
+                    stats = await dbService.getDailyWaterIntake(chatId);
                     title = 'Статистика за сегодня';
                     break;
                 case 'week':
@@ -220,26 +293,49 @@ class CallbackHandler {
         }
     }
 
+    async handleStats(msg) {
+        const chatId = msg.chat.id;
+        const dailyIntake = await dbService.getDailyWaterIntake(chatId);
+        const user = await dbService.getUser(chatId);
+        const goal = user.daily_goal;
+        
+        let message = '📊 Статистика потребления жидкости:\n\n';
+        message += `💧 Вода: ${dailyIntake.water}л\n`;
+        message += `🥤 Другие напитки: ${dailyIntake.other}л\n`;
+        message += `📊 Всего: ${dailyIntake.total}л из ${goal}л\n\n`;
+        
+        const percentage = Math.round((dailyIntake.total / goal) * 100);
+        message += `Прогресс: ${percentage}%\n`;
+        message += this.getProgressBar(percentage);
+        
+        await telegramService.sendMessage(chatId, message);
+    }
+
+    getProgressBar(percentage) {
+        const filledCount = Math.floor(percentage / 10);
+        const emptyCount = 10 - filledCount;
+        return '🟦'.repeat(filledCount) + '⬜️'.repeat(emptyCount);
+    }
+
     formatStatsMessage(title, stats, period, dailyGoal) {
         let message = `📊 ${title}\n\n`;
 
         if (period === 'today') {
-            const percentage = ValidationUtil.formatPercentage(stats, dailyGoal);
-            const progressBar = ValidationUtil.createProgressBar(percentage);
-            message += `Выпито: ${ValidationUtil.formatWaterAmount(stats)}\n` +
-                      `Цель: ${ValidationUtil.formatWaterAmount(dailyGoal)}\n` +
-                      `Прогресс: ${percentage}%\n${progressBar}`;
-        } else if (period === 'all') {
-            message += `Всего выпито: ${ValidationUtil.formatWaterAmount(stats.total)}\n` +
-                      `Среднее в день: ${ValidationUtil.formatWaterAmount(stats.average)}\n` +
-                      `Лучший день: ${ValidationUtil.formatWaterAmount(stats.max)}\n` +
-                      `Дней отслеживания: ${stats.days}`;
+            const percentage = ValidationUtil.formatPercentage(stats.total, dailyGoal);
+            message += `💧 Вода: ${stats.water}л\n`;
+            message += `🥤 Другие напитки: ${stats.other}л\n`;
+            message += `📊 Всего: ${stats.total}л из ${dailyGoal}л\n`;
+            message += `✨ Прогресс: ${percentage}%\n`;
+            message += this.getProgressBar(percentage);
         } else {
-            // week or month
-            message += `Всего выпито: ${ValidationUtil.formatWaterAmount(stats.total)}\n` +
-                      `Среднее в день: ${ValidationUtil.formatWaterAmount(stats.average)}\n` +
-                      `Лучший день: ${ValidationUtil.formatWaterAmount(stats.max)} (${stats.maxDate})\n` +
-                      `Дней с записями: ${stats.daysWithRecords} из ${stats.totalDays}`;
+            stats.forEach(day => {
+                const date = new Date(day.date);
+                const formattedDate = date.toLocaleDateString('ru-RU', { weekday: 'short', month: 'short', day: 'numeric' });
+                message += `${formattedDate}:\n`;
+                message += `💧 Вода: ${day.water}л\n`;
+                message += `🥤 Другие: ${day.other}л\n`;
+                message += `📊 Всего: ${day.total}л\n\n`;
+            });
         }
 
         return message;
