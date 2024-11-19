@@ -14,14 +14,10 @@ class App {
         try {
             logger.info('Starting Water Reminder Bot...');
             
-            // Логируем режим запуска
-            const isDocker = process.env.IS_DOCKER === 'true';
-            logger.info(`Running in ${isDocker ? 'Docker' : 'Local'} mode`);
-            logger.info(`Database path: ${config.database.path}`);
-            
-            // Проверяем существование базы данных
-            const dbExists = fs.existsSync(path.resolve(config.database.path));
-            logger.info(`Database ${dbExists ? 'found' : 'not found'} at path: ${config.database.path}`);
+            // Логируем режим запуска и состояние базы данных
+            logger.info(`Running in ${dbService.getMode()} mode`);
+            logger.info(`Database path: ${dbService.getDbPath()}`);
+            logger.info(`Database ${dbService.exists() ? 'found' : 'not found'} at path: ${dbService.getDbPath()}`);
             
             logger.info('Initializing database...');
             await dbService.init();

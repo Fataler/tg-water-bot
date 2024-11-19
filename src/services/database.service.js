@@ -10,10 +10,25 @@ class DatabaseService {
         this.db = null;
     }
 
+    getMode() {
+        return process.env.IS_DOCKER === 'true' ? 'Docker' : 'Local';
+    }
+
+    getDbPath() {
+        return this.getMode() === 'Docker'
+            ? config.database.path
+            : path.join(__dirname, '../../', config.database.path);
+    }
+
+    exists() {
+        const dbPath = this.getDbPath();
+        return fs.existsSync(dbPath);
+    }
+
     async init() {
         try {
             logger.info('Initializing database connection...');
-            const dbPath = path.join(__dirname, '../../', config.database.path);
+            const dbPath = this.getDbPath();
             const dbDir = path.dirname(dbPath);
             
             if (!fs.existsSync(dbDir)) {
@@ -22,7 +37,7 @@ class DatabaseService {
             }
 
             this.db = new Database(dbPath);
-            await runMigrations();
+            await runMigrations(this.db);
             logger.info('Database initialized successfully');
         } catch (error) {
             logger.error('Failed to initialize database:', error);

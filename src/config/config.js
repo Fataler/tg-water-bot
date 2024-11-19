@@ -6,9 +6,9 @@ module.exports = {
         options: { polling: true }
     },
     database: {
-        path: process.env.IS_DOCKER === 'true' 
-            ? (process.env.DOCKER_DB_PATH || '/data/water_bot.db')
-            : (process.env.DB_PATH || 'data/water_bot.db')
+        path: process.env.IS_DOCKER === 'true'
+            ? (process.env.DOCKER_DB_PATH || '/data/water_bot.db')  // Абсолютный путь для Docker
+            : (process.env.DB_PATH || 'data/water_bot.db')          // Относительный путь для локальной разработки
     },
     server: {
         port: process.env.PORT || 3000,
