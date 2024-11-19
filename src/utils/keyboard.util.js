@@ -26,94 +26,112 @@ class KeyboardUtil {
         };
     }
 
-    static getWaterAmountKeyboard(message_id) {
+    static getAmountKeyboard(type, message_id) {
+        const amounts = [
+            [
+                { amount: '0.2', text: '0.2л' },
+                { amount: '0.3', text: '0.3л' },
+                { amount: '0.5', text: '0.5л' }
+            ],
+            [
+                { amount: '0.7', text: '0.7л' },
+                { amount: '1.0', text: '1.0л' },
+                { amount: 'custom', text: 'Другое' }
+            ]
+        ];
+
         return {
             reply_markup: {
-                inline_keyboard: [
-                    [
-                        { text: '0.2л', callback_data: `water_0.2_${message_id}` },
-                        { text: '0.3л', callback_data: `water_0.3_${message_id}` },
-                        { text: '0.5л', callback_data: `water_0.5_${message_id}` }
-                    ],
-                    [
-                        { text: '0.7л', callback_data: `water_0.7_${message_id}` },
-                        { text: '1.0л', callback_data: `water_1.0_${message_id}` },
-                        { text: 'Другое', callback_data: `water_custom_${message_id}` }
-                    ]
-                ]
+                inline_keyboard: amounts.map(row => 
+                    row.map(item => ({
+                        text: item.text,
+                        callback_data: `${type}_${item.amount}_${message_id}`
+                    }))
+                )
             }
         };
     }
 
+    static getWaterAmountKeyboard(message_id) {
+        return this.getAmountKeyboard('water', message_id);
+    }
+
     static getOtherDrinkAmountKeyboard(message_id) {
+        return this.getAmountKeyboard('other', message_id);
+    }
+
+    static getStatsKeyboard(message_id) {
+        const periods = [
+            [
+                { period: 'today', text: 'Сегодня' },
+                { period: 'week', text: 'Неделя' }
+            ],
+            [
+                { period: 'month', text: 'Месяц' },
+                { period: 'all', text: 'Всё время' }
+            ]
+        ];
+
         return {
             reply_markup: {
-                inline_keyboard: [
-                    [
-                        { text: '0.2л', callback_data: `other_0.2_${message_id}` },
-                        { text: '0.3л', callback_data: `other_0.3_${message_id}` },
-                        { text: '0.5л', callback_data: `other_0.5_${message_id}` }
-                    ],
-                    [
-                        { text: '0.7л', callback_data: `other_0.7_${message_id}` },
-                        { text: '1.0л', callback_data: `other_1.0_${message_id}` },
-                        { text: 'Другое', callback_data: `other_custom_${message_id}` }
-                    ]
-                ]
+                inline_keyboard: periods.map(row =>
+                    row.map(item => ({
+                        text: item.text,
+                        callback_data: `stats_${item.period}_${message_id}`
+                    }))
+                )
             }
         };
     }
 
     static getGoalKeyboard() {
-        return {
-            reply_markup: {
-                inline_keyboard: [
-                    [
-                        { text: '1.5л', callback_data: 'goal_1.5' },
-                        { text: '2л', callback_data: 'goal_2' },
-                        { text: '2.5л', callback_data: 'goal_2.5' }
-                    ],
-                    [
-                        { text: '3л', callback_data: 'goal_3' },
-                        { text: 'Другое значение', callback_data: 'goal_custom' }
-                    ]
-                ]
-            }
-        };
-    }
+        const goals = [
+            [
+                { goal: '1.5', text: '1.5л' },
+                { goal: '2', text: '2л' },
+                { goal: '2.5', text: '2.5л' }
+            ],
+            [
+                { goal: '3', text: '3л' },
+                { goal: 'custom', text: 'Другое значение' }
+            ]
+        ];
 
-    static getStatsKeyboard(message_id) {
         return {
             reply_markup: {
-                inline_keyboard: [
-                    [
-                        { text: 'Сегодня', callback_data: `stats_today_${message_id}` },
-                        { text: 'Неделя', callback_data: `stats_week_${message_id}` }
-                    ],
-                    [
-                        { text: 'Месяц', callback_data: `stats_month_${message_id}` },
-                        { text: 'Всё время', callback_data: `stats_all_${message_id}` }
-                    ]
-                ]
+                inline_keyboard: goals.map(row =>
+                    row.map(item => ({
+                        text: item.text,
+                        callback_data: `goal_${item.goal}`
+                    }))
+                )
             }
         };
     }
 
     static getSettingsKeyboard(user, message_id) {
+        const settings = [
+            [
+                { setting: 'goal', text: '🎯 Изменить цель' },
+                { setting: 'time', text: '⏰ Изменить время' }
+            ],
+            [
+                {
+                    setting: 'notifications',
+                    text: user.do_not_disturb ? '🔔 Включить уведомления' : '🔕 Отключить уведомления',
+                    value: !user.do_not_disturb
+                }
+            ]
+        ];
+
         return {
             reply_markup: {
-                inline_keyboard: [
-                    [
-                        { text: '🎯 Изменить цель', callback_data: `settings_goal_${message_id}` },
-                        { text: '⏰ Изменить время', callback_data: `settings_time_${message_id}` }
-                    ],
-                    [
-                        {
-                            text: user.do_not_disturb ? '🔔 Включить уведомления' : '🔕 Отключить уведомления',
-                            callback_data: `settings_notifications_${!user.do_not_disturb}_${message_id}`
-                        }
-                    ]
-                ]
+                inline_keyboard: settings.map(row =>
+                    row.map(item => ({
+                        text: item.text,
+                        callback_data: `settings_${item.setting}${item.value !== undefined ? '_' + item.value : ''}_${message_id}`
+                    }))
+                )
             }
         };
     }
