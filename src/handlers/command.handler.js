@@ -3,6 +3,7 @@ const dbService = require('../services/database.service');
 const notificationService = require('../services/notification.service');
 const KeyboardUtil = require('../utils/keyboard.util');
 const ValidationUtil = require('../utils/validation.util');
+const config = require('../config/config');
 
 class CommandHandler {
     async handleStart(msg) {
@@ -107,6 +108,27 @@ class CommandHandler {
         await telegramService.sendMessage(chatId, helpText, { parse_mode: 'Markdown' });
     }
 
+    async handleDebug(msg) {
+        const chatId = msg.chat.id;
+        // Проверяем, является ли пользователь администратором
+        if (config.adminIds && config.adminIds.includes(chatId)) {
+            try {
+                const user = await dbService.getUser(chatId);
+                if (!user) {
+                    await telegramService.sendMessage(chatId, '❌ Пользователь не найден');
+                    return;
+                }
+                await notificationService.sendReminder(user);
+                await telegramService.sendMessage(chatId, '✅ Тестовое уведомление отправлено');
+            } catch (error) {
+                console.error('Error sending debug notification:', error);
+                await telegramService.sendMessage(chatId, '❌ Ошибка при отправке тестового уведомления');
+            }
+        } else {
+            await telegramService.sendMessage(chatId, '⛔️ У вас нет прав для использования этой команды');
+        }
+    }
+
     setupHandlers() {
         telegramService.onText(/\/start/, this.handleStart);
         telegramService.onText(/\/reset/, this.handleReset);
@@ -114,6 +136,7 @@ class CommandHandler {
         telegramService.onText(/📊 Статистика/, this.handleStats);
         telegramService.onText(/⚙️ Настройки/, this.handleSettings);
         telegramService.onText(/\/help/, this.handleHelp);
+        telegramService.onText(/\/debug/, this.handleDebug);
     }
 }
 

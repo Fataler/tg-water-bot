@@ -24,5 +24,6 @@ module.exports = {
             defaultGoal: 2
         },
         timeFormat: 'HH:mm'
-    }
+    },
+    adminIds: [302860056]
 };
