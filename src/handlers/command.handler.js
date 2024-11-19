@@ -72,10 +72,17 @@ class CommandHandler {
         const chatId = msg.chat.id;
         const user = await dbService.getUser(chatId);
         if (user) {
-            await telegramService.sendMessage(
+            const message = await telegramService.sendMessage(
                 chatId,
                 'Настройки:',
-                KeyboardUtil.createSettingsKeyboard(user)
+                KeyboardUtil.getSettingsKeyboard(user, null)
+            );
+            // Update the keyboard with the correct message ID
+            await telegramService.editMessage(
+                chatId,
+                message.message_id,
+                'Настройки:',
+                KeyboardUtil.getSettingsKeyboard(user, message.message_id)
             );
         }
     }

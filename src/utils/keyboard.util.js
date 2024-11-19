@@ -13,57 +13,51 @@ class KeyboardUtil {
         };
     }
 
-    static getDrinkTypeKeyboard() {
+    static getDrinkTypeKeyboard(message_id) {
         return {
             reply_markup: {
                 inline_keyboard: [
                     [
-                        { text: '💧 Вода', callback_data: 'drink_water' },
-                        { text: '🥤 Другой напиток', callback_data: 'drink_other' }
+                        { text: '💧 Вода', callback_data: `drink_water_${message_id}` },
+                        { text: '🥤 Другой напиток', callback_data: `drink_other_${message_id}` }
                     ]
                 ]
             }
         };
     }
 
-    static getWaterAmountKeyboard() {
+    static getWaterAmountKeyboard(message_id) {
         return {
             reply_markup: {
                 inline_keyboard: [
                     [
-                        { text: '0.25л', callback_data: 'water_0.25' },
-                        { text: '0.5л', callback_data: 'water_0.5' },
-                        { text: '0.75л', callback_data: 'water_0.75' }
+                        { text: '0.2л', callback_data: `water_0.2_${message_id}` },
+                        { text: '0.3л', callback_data: `water_0.3_${message_id}` },
+                        { text: '0.5л', callback_data: `water_0.5_${message_id}` }
                     ],
                     [
-                        { text: '1л', callback_data: 'water_1' },
-                        { text: '1.5л', callback_data: 'water_1.5' },
-                        { text: '2л', callback_data: 'water_2' }
-                    ],
-                    [
-                        { text: 'Другое количество', callback_data: 'water_custom' }
+                        { text: '0.7л', callback_data: `water_0.7_${message_id}` },
+                        { text: '1.0л', callback_data: `water_1.0_${message_id}` },
+                        { text: 'Другое', callback_data: `water_custom_${message_id}` }
                     ]
                 ]
             }
         };
     }
 
-    static getOtherDrinkAmountKeyboard() {
+    static getOtherDrinkAmountKeyboard(message_id) {
         return {
             reply_markup: {
                 inline_keyboard: [
                     [
-                        { text: '0.25л', callback_data: 'other_0.25' },
-                        { text: '0.5л', callback_data: 'other_0.5' },
-                        { text: '0.75л', callback_data: 'other_0.75' }
+                        { text: '0.2л', callback_data: `other_0.2_${message_id}` },
+                        { text: '0.3л', callback_data: `other_0.3_${message_id}` },
+                        { text: '0.5л', callback_data: `other_0.5_${message_id}` }
                     ],
                     [
-                        { text: '1л', callback_data: 'other_1' },
-                        { text: '1.5л', callback_data: 'other_1.5' },
-                        { text: '2л', callback_data: 'other_2' }
-                    ],
-                    [
-                        { text: 'Другое количество', callback_data: 'other_custom' }
+                        { text: '0.7л', callback_data: `other_0.7_${message_id}` },
+                        { text: '1.0л', callback_data: `other_1.0_${message_id}` },
+                        { text: 'Другое', callback_data: `other_custom_${message_id}` }
                     ]
                 ]
             }
@@ -88,33 +82,37 @@ class KeyboardUtil {
         };
     }
 
-    static getStatsKeyboard() {
+    static getStatsKeyboard(message_id) {
         return {
             reply_markup: {
                 inline_keyboard: [
                     [
-                        { text: 'За сегодня', callback_data: 'stats_today' },
-                        { text: 'За неделю', callback_data: 'stats_week' }
+                        { text: 'Сегодня', callback_data: `stats_today_${message_id}` },
+                        { text: 'Неделя', callback_data: `stats_week_${message_id}` }
                     ],
                     [
-                        { text: 'За месяц', callback_data: 'stats_month' },
-                        { text: 'За все время', callback_data: 'stats_all' }
+                        { text: 'Месяц', callback_data: `stats_month_${message_id}` },
+                        { text: 'Всё время', callback_data: `stats_all_${message_id}` }
                     ]
                 ]
             }
         };
     }
 
-    static createSettingsKeyboard(user) {
+    static getSettingsKeyboard(user, message_id) {
         return {
             reply_markup: {
                 inline_keyboard: [
-                    [{ text: 'Изменить цель', callback_data: 'settings_goal' }],
-                    [{ text: 'Изменить время напоминаний', callback_data: 'settings_time' }],
-                    [{ 
-                        text: user.do_not_disturb ? 'Включить уведомления' : 'Отключить уведомления',
-                        callback_data: `settings_notifications_${!user.do_not_disturb}`
-                    }]
+                    [
+                        { text: '🎯 Изменить цель', callback_data: `settings_goal_${message_id}` },
+                        { text: '⏰ Изменить время', callback_data: `settings_time_${message_id}` }
+                    ],
+                    [
+                        {
+                            text: user.do_not_disturb ? '🔔 Включить уведомления' : '🔕 Отключить уведомления',
+                            callback_data: `settings_notifications_${!user.do_not_disturb}_${message_id}`
+                        }
+                    ]
                 ]
             }
         };
