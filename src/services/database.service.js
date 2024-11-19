@@ -41,6 +41,7 @@ class DatabaseService {
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id INTEGER NOT NULL,
                 amount REAL NOT NULL,
+                drink_type TEXT DEFAULT 'water',
                 timestamp DATETIME DEFAULT (strftime('%Y-%m-%d %H:%M:%S', 'now', 'localtime')),
                 FOREIGN KEY (user_id) REFERENCES users (user_id)
             )`
@@ -49,6 +50,9 @@ class DatabaseService {
         for (const query of queries) {
             this.db.exec(query);
         }
+
+        // Добавляем индекс для оптимизации запросов
+        this.db.exec(`CREATE INDEX IF NOT EXISTS idx_water_intake_user_date ON water_intake(user_id, timestamp)`);
     }
 
     async addUser(userId, dailyGoal, notificationTime) {
@@ -111,84 +115,63 @@ class DatabaseService {
         }
     }
 
-    async addWaterIntake(userId, amount) {
-        try {
-            this.db.prepare(
-                'INSERT INTO water_intake (user_id, amount) VALUES (?, ?)'
-            ).run(userId, amount);
-        } catch (error) {
-            console.error('Ошибка при добавлении записи о воде:', error);
-            throw error;
-        }
+    async addWaterIntake(userId, amount, drinkType = 'water') {
+        const stmt = this.db.prepare(
+            'INSERT INTO water_intake (user_id, amount, drink_type) VALUES (?, ?, ?)'
+        );
+        return stmt.run(userId, amount, drinkType);
     }
 
-    async getDailyWaterIntake(userId, date) {
-        try {
-            const result = this.db.prepare(`
-                SELECT COALESCE(SUM(amount), 0) as total
-                FROM water_intake 
-                WHERE user_id = ? 
-                AND date(timestamp, 'localtime') = date(?, 'localtime')
-            `).get(userId, date.toISOString());
-            
-            return result.total;
-        } catch (error) {
-            console.error('Ошибка при получении дневного потребления воды:', error);
-            throw error;
-        }
+    async getDailyWaterIntake(userId, date = new Date()) {
+        const startOfDay = new Date(date);
+        startOfDay.setHours(0, 0, 0, 0);
+        
+        const endOfDay = new Date(date);
+        endOfDay.setHours(23, 59, 59, 999);
+
+        const stmt = this.db.prepare(`
+            SELECT SUM(amount) as total,
+                   SUM(CASE WHEN drink_type = 'water' THEN amount ELSE 0 END) as water,
+                   SUM(CASE WHEN drink_type = 'other' THEN amount ELSE 0 END) as other
+            FROM water_intake 
+            WHERE user_id = ? 
+            AND timestamp BETWEEN datetime(?, 'localtime') AND datetime(?, 'localtime')
+        `);
+
+        const result = stmt.get(
+            userId,
+            startOfDay.toISOString(),
+            endOfDay.toISOString()
+        );
+
+        return {
+            total: result.total || 0,
+            water: result.water || 0,
+            other: result.other || 0
+        };
     }
 
     async getWaterHistory(userId, days) {
-        try {
-            const startDate = new Date();
-            startDate.setDate(startDate.getDate() - days + 1); // +1 чтобы включить текущий день
-            
-            const result = this.db.prepare(`
-                WITH RECURSIVE dates(date) AS (
-                    SELECT date(datetime('now', 'localtime'))
-                    UNION ALL
-                    SELECT date(date, '-1 day')
-                    FROM dates
-                    WHERE date > date(?, 'localtime')
-                )
-                SELECT 
-                    dates.date,
-                    COALESCE(SUM(wi.amount), 0) as amount
-                FROM dates
-                LEFT JOIN water_intake wi ON date(wi.timestamp, 'localtime') = dates.date 
-                    AND wi.user_id = ?
-                GROUP BY dates.date
-                ORDER BY dates.date DESC
-                LIMIT ?
-            `).all(startDate.toISOString(), userId, days);
+        const stmt = this.db.prepare(`
+            SELECT 
+                date(timestamp, 'localtime') as date,
+                SUM(amount) as total,
+                SUM(CASE WHEN drink_type = 'water' THEN amount ELSE 0 END) as water,
+                SUM(CASE WHEN drink_type = 'other' THEN amount ELSE 0 END) as other
+            FROM water_intake 
+            WHERE user_id = ? 
+            AND timestamp >= datetime('now', '-' || ? || ' days', 'localtime')
+            GROUP BY date(timestamp, 'localtime')
+            ORDER BY date DESC
+        `);
 
-            const total = result.reduce((sum, day) => sum + day.amount, 0);
-            const average = total / days;
-            const daysWithRecords = result.filter(day => day.amount > 0).length;
-            
-            let max = 0;
-            let maxDate = null;
-            
-            for (const day of result) {
-                if (day.amount > max) {
-                    max = day.amount;
-                    maxDate = day.date;
-                }
-            }
-
-            return {
-                total,
-                average,
-                max,
-                maxDate,
-                daysWithRecords,
-                totalDays: days,
-                dailyData: result
-            };
-        } catch (error) {
-            console.error('Ошибка при получении истории потребления воды:', error);
-            throw error;
-        }
+        const results = stmt.all(userId, days);
+        return results.map(row => ({
+            date: row.date,
+            total: row.total || 0,
+            water: row.water || 0,
+            other: row.other || 0
+        }));
     }
 
     async getWaterStats(userId) {
@@ -201,13 +184,22 @@ class DatabaseService {
                     FROM water_intake
                     WHERE user_id = ?
                     GROUP BY date(timestamp, 'localtime')
+                ),
+                max_stats AS (
+                    SELECT MAX(daily_total) as max_total
+                    FROM daily_stats
                 )
                 SELECT 
-                    COUNT(date) as days,
-                    COALESCE(SUM(daily_total), 0) as total,
-                    COALESCE(MAX(daily_total), 0) as max_daily,
-                    COALESCE(MAX(CASE WHEN daily_total = MAX(daily_total) OVER () THEN date END), '') as max_date
-                FROM daily_stats
+                    COUNT(ds.date) as days,
+                    COALESCE(SUM(ds.daily_total), 0) as total,
+                    COALESCE(MAX(ds.daily_total), 0) as max_daily,
+                    COALESCE((
+                        SELECT date 
+                        FROM daily_stats 
+                        WHERE daily_total = max_stats.max_total 
+                        LIMIT 1
+                    ), '') as max_date
+                FROM daily_stats ds, max_stats
             `).get(userId);
 
             return {

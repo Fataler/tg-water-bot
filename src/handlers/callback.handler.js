@@ -327,6 +327,11 @@ class CallbackHandler {
             message += `📊 Всего: ${stats.total}л из ${dailyGoal}л\n`;
             message += `✨ Прогресс: ${percentage}%\n`;
             message += this.getProgressBar(percentage);
+        } else if (period === 'all') {
+            message += `📅 Дней ведения статистики: ${stats.days}\n`;
+            message += `💧 Общий объем: ${stats.total}л\n`;
+            message += `📈 Среднее в день: ${stats.average.toFixed(2)}л\n`;
+            message += `🏆 Максимум за день: ${stats.max}л (${stats.maxDate})\n`;
         } else {
             stats.forEach(day => {
                 const date = new Date(day.date);
