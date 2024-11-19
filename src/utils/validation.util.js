@@ -30,7 +30,8 @@ class ValidationUtil {
     }
 
     static formatWaterAmount(amount) {
-        return `${amount.toFixed(2)}л`;
+        const num = parseFloat(amount);
+        return `${num.toFixed(2)}л`;
     }
 
     static formatPercentage(current, goal) {

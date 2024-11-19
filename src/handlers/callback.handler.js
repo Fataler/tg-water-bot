@@ -35,8 +35,12 @@ class CallbackHandler {
             // Отвечаем на callback query, чтобы убрать часики
             await telegramService.getBot().answerCallbackQuery(query.id);
         } catch (error) {
-            console.error('Error handling callback:', error);
-            await telegramService.sendMessage(chatId, 'Произошла ошибка. Попробуйте еще раз.');
+            console.error('Error in callback handler:', error);
+            await telegramService.sendMessage(
+                chatId,
+                'Произошла ошибка. Попробуйте еще раз.',
+                KeyboardUtil.getMainKeyboard()
+            );
         }
     }
 
@@ -69,15 +73,13 @@ class CallbackHandler {
         }
     }
 
-    async handleWaterCallback(chatId, data, messageId) {
-        const [_, amount] = data.split('_');
-        
-        // Удаляем сообщение с выбором количества
-        await telegramService.deleteMessage(chatId, messageId);
-        
+    async handleDrinkIntake(chatId, amount, type = 'water') {
         if (amount === 'custom') {
-            await telegramService.sendMessage(chatId, '💧 Сколько литров воды ты выпил(а)? (например: 0.5):');
-            this.userTemp.set(chatId, { waitingFor: 'custom_water' });
+            const message = type === 'water' 
+                ? '💧 Сколько литров воды ты выпил(а)? (например: 0.5):'
+                : '🥤 Сколько литров напитка ты выпил(а)? (например: 0.5):';
+            await telegramService.sendMessage(chatId, message);
+            this.userTemp.set(chatId, { waitingFor: `custom_${type}` });
             return;
         }
 
@@ -88,86 +90,51 @@ class CallbackHandler {
         }
 
         try {
-            await dbService.addWaterIntake(chatId, numAmount, 'water');
+            await dbService.addWaterIntake(chatId, numAmount, type);
             const dailyIntake = await dbService.getDailyWaterIntake(chatId);
             const user = await dbService.getUser(chatId);
             const goal = user.daily_goal;
 
-            // Обновляем состояние напоминаний
             await notificationService.updateUserReminder(chatId);
             
             await telegramService.sendMessage(
                 chatId,
-                `🎯 Отлично! Добавлено ${ValidationUtil.formatWaterAmount(numAmount)}!\n\n` +
-                `💧 Вода: ${ValidationUtil.formatWaterAmount(dailyIntake.water)}\n` +
-                `🥤 Другие напитки: ${ValidationUtil.formatWaterAmount(dailyIntake.other)}\n` +
-                `📊 Всего: ${ValidationUtil.formatWaterAmount(dailyIntake.total)} из ${ValidationUtil.formatWaterAmount(goal)}\n\n` +
-                `${dailyIntake.total >= goal ? '🎉 Ты достиг(ла) дневной цели! Так держать! 💪' : '💪 Продолжай в том же духе!'}`,
+                this.formatWaterMessage(numAmount, dailyIntake, goal),
                 KeyboardUtil.getMainKeyboard()
             );
         } catch (error) {
-            console.error('Error adding water:', error);
+            console.error(`Error adding ${type}:`, error);
             await telegramService.sendMessage(chatId, '❌ Произошла ошибка. Попробуйте еще раз.');
         }
     }
 
+    async handleWaterCallback(chatId, data, messageId) {
+        const [_, amount] = data.split('_');
+        await telegramService.deleteMessage(chatId, messageId);
+        await this.handleDrinkIntake(chatId, amount, 'water');
+    }
+
     async handleOtherDrinkCallback(chatId, data, messageId) {
         const [_, amount] = data.split('_');
-        
-        // Удаляем сообщение с выбором количества
         await telegramService.deleteMessage(chatId, messageId);
-        
-        if (amount === 'custom') {
-            await telegramService.sendMessage(chatId, '🥤 Сколько литров напитка ты выпил(а)? (например: 0.5):');
-            this.userTemp.set(chatId, { waitingFor: 'custom_other' });
-            return;
-        }
+        await this.handleDrinkIntake(chatId, amount, 'other');
+    }
 
-        const numAmount = parseFloat(amount);
-        if (!ValidationUtil.isValidAmount(numAmount)) {
-            await telegramService.sendMessage(chatId, '⚠️ Некорректное количество. Попробуйте еще раз.');
-            return;
-        }
-
-        try {
-            await dbService.addWaterIntake(chatId, numAmount, 'other');
-            const dailyIntake = await dbService.getDailyWaterIntake(chatId);
-            const user = await dbService.getUser(chatId);
-            const goal = user.daily_goal;
-
-            // Обновляем состояние напоминаний
-            await notificationService.updateUserReminder(chatId);
-            
-            await telegramService.sendMessage(
-                chatId,
-                `🎯 Отлично! Добавлено ${ValidationUtil.formatWaterAmount(numAmount)} другого напитка!\n\n` +
-                `💧 Вода: ${ValidationUtil.formatWaterAmount(dailyIntake.water)}\n` +
-                `🥤 Другие напитки: ${ValidationUtil.formatWaterAmount(dailyIntake.other)}\n` +
-                `📊 Всего: ${ValidationUtil.formatWaterAmount(dailyIntake.total)} из ${ValidationUtil.formatWaterAmount(goal)}\n\n` +
-                `${dailyIntake.total >= goal ? '🎉 Ты достиг(ла) дневной цели! Так держать! 💪' : '💪 Продолжай в том же духе!'}`,
-                KeyboardUtil.getMainKeyboard()
-            );
-        } catch (error) {
-            console.error('Error adding other drink:', error);
-            await telegramService.sendMessage(chatId, '❌ Произошла ошибка. Попробуйте еще раз.');
-        }
+    async addWaterIntake(chatId, amount) {
+        await this.handleDrinkIntake(chatId, amount.toString());
     }
 
     async handleStatsCallback(chatId, data, messageId) {
         const [_, period] = data.split('_');
         
-        // Удаляем сообщение с выбором периода
         await telegramService.deleteMessage(chatId, messageId);
         
         await this.showStats(chatId, period);
     }
 
     async handleSettingsCallback(chatId, data, messageId) {
-        const [_, setting, value] = data.split('_');
+        const [_, setting] = data.split('_');
         
-        // Удаляем сообщение с настройками
-        await telegramService.deleteMessage(chatId, messageId);
-
         switch (setting) {
             case 'goal':
                 await telegramService.sendMessage(
@@ -176,32 +143,13 @@ class CallbackHandler {
                     KeyboardUtil.getGoalKeyboard()
                 );
                 break;
-            case 'notifications':
-                const status = value === 'true';
-                await dbService.updateDoNotDisturb(chatId, !status);
-                if (status) {
-                    await notificationService.updateUserReminder(chatId);
-                } else {
-                    notificationService.cancelUserReminders(chatId);
-                }
+            default:
                 await telegramService.sendMessage(
                     chatId,
-                    status ? 'Уведомления включены' : 'Уведомления отключены',
+                    'Используйте кнопки меню для взаимодействия с ботом.',
                     KeyboardUtil.getMainKeyboard()
                 );
-                break;
         }
-    }
-
-    async handleTimeCallback(chatId, data, messageId) {
-        // Этот метод больше не нужен, но оставляем его пустым на случай,
-        // если какие-то старые сообщения всё ещё содержат time_ колбэки
-        await telegramService.deleteMessage(chatId, messageId);
-        await telegramService.sendMessage(
-            chatId,
-            'Эта функция больше не поддерживается. Теперь бот сам определяет оптимальное время для напоминаний!',
-            KeyboardUtil.getMainKeyboard()
-        );
     }
 
     async handleResetCallback(chatId, data, messageId) {
@@ -260,28 +208,12 @@ class CallbackHandler {
         }
     }
 
-    async addWaterIntake(chatId, amount) {
-        try {
-            await dbService.addWaterIntake(chatId, amount);
-            const user = await dbService.getUser(chatId);
-            const dailyIntake = await dbService.getDailyWaterIntake(chatId);
-            const percentage = ValidationUtil.formatPercentage(dailyIntake, user.daily_goal);
-            const progressBar = ValidationUtil.createProgressBar(percentage);
-
-            const message = `✅ Добавлено: ${ValidationUtil.formatWaterAmount(amount)}\n\n` +
-                          `Сегодня выпито: ${ValidationUtil.formatWaterAmount(dailyIntake)}\n` +
-                          `Цель: ${ValidationUtil.formatWaterAmount(user.daily_goal)}\n` +
-                          `Прогресс: ${percentage}%\n${progressBar}`;
-
-            await telegramService.sendMessage(chatId, message, KeyboardUtil.getMainKeyboard());
-        } catch (error) {
-            console.error('Error adding water intake:', error);
-            await telegramService.sendMessage(
-                chatId,
-                'Произошла ошибка при добавлении воды. Попробуйте еще раз.',
-                KeyboardUtil.getMainKeyboard()
-            );
-        }
+    formatWaterMessage(amount, dailyIntake, goal) {
+        return `🎯 Отлично! Добавлено ${ValidationUtil.formatWaterAmount(amount)}!\n\n` +
+               `💧 Вода: ${ValidationUtil.formatWaterAmount(dailyIntake.water)}\n` +
+               `🥤 Другие напитки: ${ValidationUtil.formatWaterAmount(dailyIntake.other)}\n` +
+               `📊 Всего: ${ValidationUtil.formatWaterAmount(dailyIntake.total)} из ${ValidationUtil.formatWaterAmount(goal)}\n\n` +
+               `${dailyIntake.total >= goal ? '🎉 Ты достиг(ла) дневной цели! Так держать! 💪' : '💪 Продолжай в том же духе!'}`;
     }
 
     async showStats(chatId, period) {
@@ -296,11 +228,11 @@ class CallbackHandler {
                     title = 'Статистика за сегодня';
                     break;
                 case 'week':
-                    stats = await dbService.getWaterHistory(chatId, 7);
+                    stats = await dbService.getWaterIntakeHistory(chatId, 7);
                     title = 'Статистика за неделю';
                     break;
                 case 'month':
-                    stats = await dbService.getWaterHistory(chatId, 30);
+                    stats = await dbService.getWaterIntakeHistory(chatId, 30);
                     title = 'Статистика за месяц';
                     break;
                 case 'all':

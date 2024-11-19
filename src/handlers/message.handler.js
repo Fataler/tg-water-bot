@@ -49,14 +49,7 @@ class MessageHandler {
                 break;
 
             case 'custom_water':
-                if (ValidationUtil.isValidWaterAmount(amount)) {
-                    await callbackHandler.addWaterIntake(chatId, amount);
-                } else {
-                    await telegramService.sendMessage(
-                        chatId,
-                        `Укажи число от ${config.validation.water.minAmount} до ${config.validation.water.maxAmount} литров.`
-                    );
-                }
+                await callbackHandler.addWaterIntake(chatId, amount);
                 break;
         }
     }

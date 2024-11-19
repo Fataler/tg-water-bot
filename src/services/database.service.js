@@ -157,10 +157,15 @@ class DatabaseService {
             if (!user) throw new Error('User not found');
 
             return this.db.prepare(`
-                SELECT amount, timestamp
+                SELECT 
+                    date(timestamp, 'localtime') as date,
+                    ROUND(COALESCE(SUM(CASE WHEN drink_type = 'water' THEN amount ELSE 0 END), 0), 2) as water,
+                    ROUND(COALESCE(SUM(CASE WHEN drink_type != 'water' THEN amount ELSE 0 END), 0), 2) as other,
+                    ROUND(COALESCE(SUM(amount), 0), 2) as total
                 FROM water_intake
                 WHERE user_id = ?
-                ORDER BY timestamp DESC
+                GROUP BY date(timestamp, 'localtime')
+                ORDER BY date DESC
                 LIMIT ?
             `).all(user.id, limit);
         } catch (error) {
@@ -187,6 +192,47 @@ class DatabaseService {
             return this.db.prepare('SELECT * FROM users').all();
         } catch (error) {
             logger.error('Error getting all users:', error);
+            throw error;
+        }
+    }
+
+    async getWaterStats(userId) {
+        try {
+            const user = await this.getUser(userId);
+            if (!user) throw new Error('User not found');
+
+            const stats = this.db.prepare(`
+                WITH daily_totals AS (
+                    SELECT 
+                        date(timestamp, 'localtime') as date,
+                        ROUND(SUM(amount), 2) as daily_total
+                    FROM water_intake
+                    WHERE user_id = ?
+                    GROUP BY date(timestamp, 'localtime')
+                )
+                SELECT 
+                    COUNT(*) as days,
+                    ROUND(SUM(daily_total), 2) as total,
+                    ROUND(AVG(daily_total), 2) as average,
+                    ROUND(MAX(daily_total), 2) as max,
+                    (
+                        SELECT date 
+                        FROM daily_totals 
+                        WHERE daily_total = (SELECT MAX(daily_total) FROM daily_totals)
+                        LIMIT 1
+                    ) as max_date
+                FROM daily_totals
+            `).get(user.id);
+
+            return {
+                days: stats.days,
+                total: stats.total || 0,
+                average: stats.average || 0,
+                max: stats.max || 0,
+                maxDate: stats.max_date || 'Нет данных'
+            };
+        } catch (error) {
+            logger.error('Error getting water stats:', error);
             throw error;
         }
     }
