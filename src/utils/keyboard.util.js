@@ -13,6 +13,19 @@ class KeyboardUtil {
         };
     }
 
+    static getDrinkTypeKeyboard() {
+        return {
+            reply_markup: {
+                inline_keyboard: [
+                    [
+                        { text: '💧 Вода', callback_data: 'drink_water' },
+                        { text: '🥤 Другой напиток', callback_data: 'drink_other' }
+                    ]
+                ]
+            }
+        };
+    }
+
     static getWaterAmountKeyboard() {
         return {
             reply_markup: {
@@ -29,6 +42,28 @@ class KeyboardUtil {
                     ],
                     [
                         { text: 'Другое количество', callback_data: 'water_custom' }
+                    ]
+                ]
+            }
+        };
+    }
+
+    static getOtherDrinkAmountKeyboard() {
+        return {
+            reply_markup: {
+                inline_keyboard: [
+                    [
+                        { text: '0.25л', callback_data: 'other_0.25' },
+                        { text: '0.5л', callback_data: 'other_0.5' },
+                        { text: '0.75л', callback_data: 'other_0.75' }
+                    ],
+                    [
+                        { text: '1л', callback_data: 'other_1' },
+                        { text: '1.5л', callback_data: 'other_1.5' },
+                        { text: '2л', callback_data: 'other_2' }
+                    ],
+                    [
+                        { text: 'Другое количество', callback_data: 'other_custom' }
                     ]
                 ]
             }

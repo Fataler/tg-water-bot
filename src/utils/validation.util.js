@@ -1,11 +1,15 @@
 const config = require('../config/config');
 
 class ValidationUtil {
-    static isValidWaterAmount(amount) {
+    static isValidAmount(amount) {
         const numAmount = parseFloat(amount);
         return !isNaN(numAmount) && 
                numAmount >= config.validation.water.minAmount && 
                numAmount <= config.validation.water.maxAmount;
+    }
+
+    static isValidWaterAmount(amount) {
+        return this.isValidAmount(amount);
     }
 
     static isValidGoal(goal) {

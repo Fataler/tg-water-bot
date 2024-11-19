@@ -53,9 +53,9 @@ class CommandHandler {
     async handleAddWater(msg) {
         const chatId = msg.chat.id;
         await telegramService.sendMessage(
-            chatId, 
-            'Сколько воды ты выпил(а)?',
-            KeyboardUtil.getWaterAmountKeyboard()
+            chatId,
+            'Выберите тип напитка:',
+            KeyboardUtil.getDrinkTypeKeyboard()
         );
     }
 
