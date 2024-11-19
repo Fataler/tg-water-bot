@@ -118,7 +118,7 @@ class NotificationService {
 
             const reminderMessage = ReminderUtil.getRandomMessage();
             const message = `${reminderMessage}\n\n` +
-                          `Сегодня вы выпили:\n` +
+                          'Сегодня вы выпили:\n' +
                           `💧 Вода: ${dailyIntake.water}л\n` +
                           `🥤 Другие напитки: ${dailyIntake.other}л\n` +
                           `📊 Всего: ${dailyIntake.total}л из ${user.daily_goal}л\n\n` +

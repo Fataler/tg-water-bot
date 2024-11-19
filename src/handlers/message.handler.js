@@ -32,25 +32,25 @@ class MessageHandler {
         }
 
         switch (userTemp.waitingFor) {
-            case 'custom_goal':
-                if (ValidationUtil.isValidGoal(amount)) {
-                    await dbService.addUser(chatId, amount, '12:00');
-                    await telegramService.sendMessage(
-                        chatId,
-                        'Отлично! В какое время напомнить о воде?',
-                        KeyboardUtil.createTimeKeyboard()
-                    );
-                } else {
-                    await telegramService.sendMessage(
-                        chatId,
-                        `Укажи число от ${config.validation.water.minAmount} до ${config.validation.water.maxAmount * 2} литров.`
-                    );
-                }
-                break;
+        case 'custom_goal':
+            if (ValidationUtil.isValidGoal(amount)) {
+                await dbService.addUser(chatId, amount, '12:00');
+                await telegramService.sendMessage(
+                    chatId,
+                    'Отлично! В какое время напомнить о воде?',
+                    KeyboardUtil.createTimeKeyboard()
+                );
+            } else {
+                await telegramService.sendMessage(
+                    chatId,
+                    `Укажи число от ${config.validation.water.minAmount} до ${config.validation.water.maxAmount * 2} литров.`
+                );
+            }
+            break;
 
-            case 'custom_water':
-                await callbackHandler.addWaterIntake(chatId, amount);
-                break;
+        case 'custom_water':
+            await callbackHandler.addWaterIntake(chatId, amount);
+            break;
         }
     }
 
