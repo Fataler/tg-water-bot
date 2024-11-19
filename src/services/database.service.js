@@ -33,9 +33,10 @@ class DatabaseService {
             `CREATE TABLE IF NOT EXISTS users (
                 user_id INTEGER PRIMARY KEY,
                 daily_goal REAL NOT NULL,
-                notification_time TEXT NOT NULL,
                 do_not_disturb INTEGER DEFAULT 0,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                last_drink_time DATETIME,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                notification_time TEXT
             )`,
             `CREATE TABLE IF NOT EXISTS water_intake (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -55,17 +56,18 @@ class DatabaseService {
         this.db.exec(`CREATE INDEX IF NOT EXISTS idx_water_intake_user_date ON water_intake(user_id, timestamp)`);
     }
 
-    async addUser(userId, dailyGoal, notificationTime) {
+    async addUser(userId, dailyGoal) {
         try {
             const user = await this.getUser(userId);
             if (user) {
                 this.db.prepare(
-                    'UPDATE users SET daily_goal = ?, notification_time = ? WHERE user_id = ?'
-                ).run(dailyGoal, notificationTime, userId);
+                    'UPDATE users SET daily_goal = ? WHERE user_id = ?'
+                ).run(dailyGoal, userId);
             } else {
+                // Set a default notification time that won't be used
                 this.db.prepare(
                     'INSERT INTO users (user_id, daily_goal, notification_time) VALUES (?, ?, ?)'
-                ).run(userId, dailyGoal, notificationTime);
+                ).run(userId, dailyGoal, '12:00');
             }
         } catch (error) {
             console.error('Ошибка при добавлении/обновлении пользователя:', error);
@@ -106,20 +108,41 @@ class DatabaseService {
 
     async updateDoNotDisturb(userId, status) {
         try {
-            this.db.prepare(
-                'UPDATE users SET do_not_disturb = ? WHERE user_id = ?'
-            ).run(status ? 1 : 0, userId);
+            this.db.prepare('UPDATE users SET do_not_disturb = ? WHERE user_id = ?').run(status ? 1 : 0, userId);
         } catch (error) {
             console.error('Ошибка при обновлении статуса уведомлений:', error);
             throw error;
         }
     }
 
+    async getLastDrinkTime(userId) {
+        try {
+            const result = this.db.prepare('SELECT last_drink_time FROM users WHERE user_id = ?').get(userId);
+            return result?.last_drink_time ? new Date(result.last_drink_time) : null;
+        } catch (error) {
+            console.error('Ошибка при получении времени последнего напитка:', error);
+            throw error;
+        }
+    }
+
     async addWaterIntake(userId, amount, drinkType = 'water') {
-        const stmt = this.db.prepare(
-            'INSERT INTO water_intake (user_id, amount, drink_type) VALUES (?, ?, ?)'
-        );
-        return stmt.run(userId, amount, drinkType);
+        try {
+            const transaction = this.db.transaction(() => {
+                // Add water intake record with automatic timestamp
+                this.db.prepare(
+                    'INSERT INTO water_intake (user_id, amount, drink_type) VALUES (?, ?, ?)'
+                ).run(userId, amount, drinkType);
+                
+                // Update last drink time using strftime
+                this.db.prepare(
+                    `UPDATE users SET last_drink_time = strftime('%Y-%m-%d %H:%M:%S', 'now', 'localtime') WHERE user_id = ?`
+                ).run(userId);
+            });
+            transaction();
+        } catch (error) {
+            console.error('Ошибка при добавлении записи о потреблении воды:', error);
+            throw error;
+        }
     }
 
     async getDailyWaterIntake(userId, date = new Date()) {
@@ -130,9 +153,9 @@ class DatabaseService {
         endOfDay.setHours(23, 59, 59, 999);
 
         const stmt = this.db.prepare(`
-            SELECT SUM(amount) as total,
-                   SUM(CASE WHEN drink_type = 'water' THEN amount ELSE 0 END) as water,
-                   SUM(CASE WHEN drink_type = 'other' THEN amount ELSE 0 END) as other
+            SELECT ROUND(SUM(amount), 2) as total,
+                   ROUND(SUM(CASE WHEN drink_type = 'water' THEN amount ELSE 0 END), 2) as water,
+                   ROUND(SUM(CASE WHEN drink_type = 'other' THEN amount ELSE 0 END), 2) as other
             FROM water_intake 
             WHERE user_id = ? 
             AND timestamp BETWEEN datetime(?, 'localtime') AND datetime(?, 'localtime')
@@ -145,9 +168,9 @@ class DatabaseService {
         );
 
         return {
-            total: result.total || 0,
-            water: result.water || 0,
-            other: result.other || 0
+            total: Number((result.total || 0).toFixed(2)),
+            water: Number((result.water || 0).toFixed(2)),
+            other: Number((result.other || 0).toFixed(2))
         };
     }
 

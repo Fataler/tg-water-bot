@@ -13,14 +13,15 @@ class CommandHandler {
         if (!user) {
             await telegramService.sendMessage(
                 chatId, 
-                'Привет! Я помогу тебе следить за потреблением воды. Давай настроим твои параметры.',
+                '👋 Привет! Я помогу тебе следить за потреблением воды. 💧\n\n' +
+                '🎯 Давай для начала установим твою цель на день:',
                 KeyboardUtil.getGoalKeyboard()
             );
         } else {
             try {
                 await telegramService.sendMessage(
                     chatId, 
-                    'С возвращением! Что будем делать?',
+                    '👋 С возвращением! Что будем делать? 💪',
                     KeyboardUtil.getMainKeyboard()
                 );
             } catch (error) {
@@ -38,15 +39,15 @@ class CommandHandler {
             reply_markup: {
                 inline_keyboard: [
                     [
-                        { text: 'Да, сбросить', callback_data: 'reset_confirm' },
-                        { text: 'Нет, отменить', callback_data: 'reset_cancel' }
+                        { text: '✅ Да, сбросить', callback_data: 'reset_confirm' },
+                        { text: '❌ Нет, отменить', callback_data: 'reset_cancel' }
                     ]
                 ]
             }
         };
         await telegramService.sendMessage(
             chatId, 
-            'Вы уверены, что хотите сбросить все настройки?',
+            '⚠️ Ты уверен(а), что хочешь сбросить все настройки?',
             confirmKeyboard
         );
     }
@@ -55,7 +56,7 @@ class CommandHandler {
         const chatId = msg.chat.id;
         await telegramService.sendMessage(
             chatId,
-            'Выберите тип напитка:',
+            '🥤 Выберите тип напитка:',
             KeyboardUtil.getDrinkTypeKeyboard()
         );
     }
@@ -64,7 +65,7 @@ class CommandHandler {
         const chatId = msg.chat.id;
         await telegramService.sendMessage(
             chatId, 
-            'Выберите период:',
+            '📊 Выберите период:',
             KeyboardUtil.getStatsKeyboard()
         );
     }
@@ -73,18 +74,29 @@ class CommandHandler {
         const chatId = msg.chat.id;
         const user = await dbService.getUser(chatId);
         if (user) {
-            const message = await telegramService.sendMessage(
-                chatId,
-                'Настройки:',
-                KeyboardUtil.getSettingsKeyboard(user, null)
-            );
-            // Update the keyboard with the correct message ID
-            await telegramService.editMessage(
-                chatId,
-                message.message_id,
-                'Настройки:',
-                KeyboardUtil.getSettingsKeyboard(user, message.message_id)
-            );
+            try {
+                // First send the message with initial keyboard
+                const message = await telegramService.sendMessage(
+                    chatId,
+                    '⚙️ Настройки:',
+                    KeyboardUtil.getSettingsKeyboard(user, null)
+                );
+                
+                // Then update it with the message ID in the keyboard
+                await telegramService.editMessage(
+                    chatId,
+                    message.message_id,
+                    '⚙️ Настройки:',
+                    KeyboardUtil.getSettingsKeyboard(user, message.message_id)
+                );
+            } catch (error) {
+                console.error('Error handling settings:', error);
+                await telegramService.sendMessage(
+                    chatId,
+                    '❌ Произошла ошибка. Попробуйте еще раз.',
+                    KeyboardUtil.getMainKeyboard()
+                );
+            }
         }
     }
 

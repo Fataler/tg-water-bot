@@ -15,7 +15,29 @@ module.exports = {
     notifications: {
         retryAttempts: 3,
         retryDelay: 1000,
-        defaultTime: '12:00'
+        defaultTime: '12:00',
+        periods: {
+            morning: {
+                start: 8,
+                end: 12,
+                targetPercent: 30
+            },
+            day: {
+                start: 12,
+                end: 18,
+                targetPercent: 50
+            },
+            evening: {
+                start: 18,
+                end: 22,
+                targetPercent: 20
+            }
+        },
+        limits: {
+            minInterval: 2 * 60 * 60 * 1000, // 2 часа в миллисекундах
+            maxDaily: 5, // максимум 5 напоминаний в день
+            backoffTime: 30 * 60 * 1000 // 30 минут после добавления записи
+        }
     },
     validation: {
         water: {

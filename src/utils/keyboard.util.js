@@ -109,53 +109,29 @@ class KeyboardUtil {
         };
     }
 
-    static getSettingsKeyboard(user, message_id) {
-        const settings = [
-            [
-                { setting: 'goal', text: '🎯 Изменить цель' },
-                { setting: 'time', text: '⏰ Изменить время' }
-            ],
-            [
-                {
-                    setting: 'notifications',
-                    text: user.do_not_disturb ? '🔔 Включить уведомления' : '🔕 Отключить уведомления',
-                    value: !user.do_not_disturb
-                }
-            ]
-        ];
-
+    static getSettingsKeyboard() {
         return {
             reply_markup: {
-                inline_keyboard: settings.map(row =>
-                    row.map(item => ({
-                        text: item.text,
-                        callback_data: `settings_${item.setting}${item.value !== undefined ? '_' + item.value : ''}_${message_id}`
-                    }))
-                )
+                inline_keyboard: [
+                    [
+                        { text: '🎯 Изменить цель', callback_data: 'settings_goal' },
+                    ],
+                    [
+                        { text: '🔔 Вкл. уведомления', callback_data: 'settings_notifications_true' },
+                        { text: '🔕 Выкл. уведомления', callback_data: 'settings_notifications_false' }
+                    ]
+                ]
             }
         };
     }
 
     static createTimeKeyboard() {
-        const keyboard = [];
-        let row = [];
-        
-        for(let i = 0; i < 24; i++) {
-            const hour = i.toString().padStart(2, '0');
-            row.push({
-                text: `${hour}:00`,
-                callback_data: `time_${hour}:00`
-            });
-            
-            if(row.length === 3 || i === 23) {
-                keyboard.push([...row]);
-                row = [];
-            }
-        }
-        
+        // Оставляем этот метод пустым на случай, если он где-то используется
         return {
             reply_markup: {
-                inline_keyboard: keyboard
+                inline_keyboard: [
+                    [{ text: '⚠️ Эта функция больше не поддерживается', callback_data: 'time_deprecated' }]
+                ]
             }
         };
     }
