@@ -164,7 +164,7 @@ class DatabaseService {
             const user = await this.getUser(userId);
             if (!user) throw new Error('User not found');
 
-            return this.db
+            const dailyIntakes = this.db
                 .prepare(
                     `
                 SELECT 
@@ -174,12 +174,38 @@ class DatabaseService {
                     ROUND(COALESCE(SUM(amount), 0), 2) as total
                 FROM water_intake
                 WHERE user_id = ?
+                AND date(timestamp, 'localtime') >= date('now', '-' || ? || ' days', 'localtime')
                 GROUP BY date(timestamp, 'localtime')
                 ORDER BY date DESC
-                LIMIT ?
             `
                 )
                 .all(user.id, limit);
+
+            if (dailyIntakes.length === 0) {
+                return {
+                    total: 0,
+                    average: 0
+                };
+            }
+
+            const total = dailyIntakes.reduce((sum, day) => sum + day.total, 0);
+            const average = Number((total / limit).toFixed(2));
+
+            let maxDay = dailyIntakes[0];
+            for (const day of dailyIntakes) {
+                if (day.total > maxDay.total) {
+                    maxDay = day;
+                }
+            }
+
+            return {
+                total: Number(total.toFixed(2)),
+                average,
+                maxDay: dailyIntakes.length > 0 ? {
+                    date: maxDay.date,
+                    amount: maxDay.total
+                } : null
+            };
         } catch (error) {
             logger.error('Error getting water intake history:', error);
             throw error;
@@ -253,6 +279,27 @@ class DatabaseService {
             };
         } catch (error) {
             logger.error('Error getting water stats:', error);
+            throw error;
+        }
+    }
+
+    async deleteUser(chatId) {
+        try {
+            const user = await this.getUser(chatId);
+            if (!user) {
+                logger.warn('User not found for deletion:', chatId);
+                return;
+            }
+
+            // Удаляем записи о потреблении воды
+            this.db.prepare('DELETE FROM water_intake WHERE user_id = ?').run(user.id);
+            
+            // Удаляем пользователя
+            this.db.prepare('DELETE FROM users WHERE chat_id = ?').run(chatId);
+            
+            logger.info('User deleted successfully:', chatId);
+        } catch (error) {
+            logger.error('Error deleting user:', error);
             throw error;
         }
     }

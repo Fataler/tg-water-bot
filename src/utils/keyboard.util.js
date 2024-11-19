@@ -1,4 +1,5 @@
 const telegramService = require('../services/telegram.service');
+const KEYBOARD = require('../config/keyboard.config');
 
 class KeyboardUtil {
     static getMainKeyboard() {
@@ -15,8 +16,14 @@ class KeyboardUtil {
             reply_markup: {
                 inline_keyboard: [
                     [
-                        { text: '💧 Вода', callback_data: `drink_water_${message_id}` },
-                        { text: '🥤 Другой напиток', callback_data: `drink_other_${message_id}` },
+                        { 
+                            text: KEYBOARD.drinks.water.text, 
+                            callback_data: `drink_${KEYBOARD.drinks.water.id}_${message_id}` 
+                        },
+                        { 
+                            text: KEYBOARD.drinks.other.text, 
+                            callback_data: `drink_${KEYBOARD.drinks.other.id}_${message_id}` 
+                        },
                     ],
                 ],
             },
@@ -27,61 +34,78 @@ class KeyboardUtil {
         return {
             reply_markup: {
                 inline_keyboard: [
-                    [{ text: '🎯 Изменить цель', callback_data: 'change_goal' }],
-                    [{ text: '❌ Сбросить прогресс', callback_data: 'reset_progress' }],
+                    [{ 
+                        text: KEYBOARD.settings.goal.text, 
+                        callback_data: `settings_${KEYBOARD.settings.goal.id}` 
+                    }],
+                    [{ 
+                        text: KEYBOARD.settings.reset.text, 
+                        callback_data: KEYBOARD.settings.reset.id 
+                    }],
                 ],
             },
         };
     }
 
     static getCustomAmountKeyboard(type, message_id) {
-        const amounts = [
-            [
-                { text: '0.1', amount: 0.1 },
-                { text: '0.2', amount: 0.2 },
-                { text: '0.3', amount: 0.3 },
-            ],
-            [
-                { text: '0.4', amount: 0.4 },
-                { text: '0.5', amount: 0.5 },
-                { text: '0.75', amount: 0.75 },
-            ],
-            [
-                { text: '1', amount: 1 },
-                { text: '1.5', amount: 1.5 },
-                { text: '2', amount: 2 },
-            ],
-        ];
+        // Преобразуем объект amounts из конфига в массив, исключая custom
+        const amountEntries = Object.entries(KEYBOARD.amounts)
+            .filter(([key]) => key !== 'custom')
+            .sort((a, b) => parseFloat(a[0]) - parseFloat(b[0]));
+
+        // Разбиваем на ряды по 3 кнопки
+        const amounts = [];
+        for (let i = 0; i < amountEntries.length; i += 3) {
+            amounts.push(amountEntries.slice(i, i + 3));
+        }
 
         return {
             reply_markup: {
-                inline_keyboard: amounts.map((row) =>
-                    row.map((item) => ({
-                        text: item.text,
-                        callback_data: `${type}_${item.amount}_${message_id}`,
-                    }))
-                ),
+                inline_keyboard: [
+                    ...amounts.map(row =>
+                        row.map(([amount, config]) => ({
+                            text: config.text,
+                            callback_data: `${type}_${amount}_${message_id}`
+                        }))
+                    ),
+                    [{ 
+                        text: KEYBOARD.amounts.custom.text,
+                        callback_data: `${type}_custom_${message_id}`
+                    }]
+                ],
             },
         };
     }
 
     static getWaterAmountKeyboard(message_id) {
-        return this.getCustomAmountKeyboard('water', message_id);
+        return this.getCustomAmountKeyboard(KEYBOARD.drinks.water.id, message_id);
     }
 
     static getOtherAmountKeyboard(message_id) {
-        return this.getCustomAmountKeyboard('other', message_id);
+        return this.getCustomAmountKeyboard(KEYBOARD.drinks.other.id, message_id);
     }
 
     static getStatsKeyboard(message_id) {
         const periods = [
             [
-                { text: 'День', period: 'day' },
-                { text: 'Неделя', period: 'week' },
+                { 
+                    text: KEYBOARD.periods.today.text, 
+                    period: KEYBOARD.periods.today.id 
+                },
+                { 
+                    text: KEYBOARD.periods.week.text, 
+                    period: KEYBOARD.periods.week.id 
+                },
             ],
             [
-                { text: 'Месяц', period: 'month' },
-                { text: 'Год', period: 'year' },
+                { 
+                    text: KEYBOARD.periods.month.text, 
+                    period: KEYBOARD.periods.month.id 
+                },
+                { 
+                    text: KEYBOARD.periods.all.text, 
+                    period: KEYBOARD.periods.all.id 
+                },
             ],
         ];
 

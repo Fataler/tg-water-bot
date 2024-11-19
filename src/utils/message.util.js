@@ -1,5 +1,7 @@
 const ValidationUtil = require('./validation.util');
 const config = require('../config/config');
+const KEYBOARD = require('../config/keyboard.config');
+const MESSAGE = require('../config/message.config');
 
 class MessageUtil {
     static formatWaterAddedMessage(amount, dailyIntake, goal) {
@@ -12,19 +14,10 @@ class MessageUtil {
         );
     }
 
-    static formatDailyStats(stats, goal, options = { showEmoji: true }) {
-        const percentage = ValidationUtil.formatPercentage(stats.total, goal);
-        let message = '';
-        message += `💧 Вода: ${ValidationUtil.formatWaterAmount(stats.water)}\n`;
-        message += `🥤 Другие напитки: ${ValidationUtil.formatWaterAmount(stats.other)}\n`;
-        message += `📊 Всего: ${ValidationUtil.formatWaterAmount(stats.total)} из ${ValidationUtil.formatWaterAmount(goal)}\n`;
-        if (options.showEmoji) {
-            message += `✨ Прогресс: ${percentage}%\n`;
-        } else {
-            message += `Прогресс: ${percentage}%\n`;
-        }
-        message += this.getProgressBar(percentage);
-        return message;
+    static formatDailyStats(amount, goal, options = { showEmoji: true }) {
+        const percent = Math.round((amount / goal) * 100);
+        const emoji = options.showEmoji ? '💧 ' : '';
+        return `${emoji}Сегодня: ${amount}л из ${goal}л (${percent}%)`;
     }
 
     static formatAllTimeStats(stats) {
@@ -37,6 +30,14 @@ class MessageUtil {
     }
 
     static formatPeriodStats(stats) {
+        if (!Array.isArray(stats)) {
+            return 'Нет данных за выбранный период';
+        }
+
+        if (stats.length === 0) {
+            return 'Нет данных за выбранный период';
+        }
+
         let message = '';
         stats.forEach((day) => {
             const date = new Date(day.date);
@@ -50,7 +51,7 @@ class MessageUtil {
             message += `🥤 Другие: ${ValidationUtil.formatWaterAmount(day.other)}\n`;
             message += `📊 Всего: ${ValidationUtil.formatWaterAmount(day.total)}\n\n`;
         });
-        return message;
+        return message || 'Нет данных за выбранный период';
     }
 
     static getProgressBar(percentage) {
@@ -72,15 +73,17 @@ class MessageUtil {
         );
     }
 
-    static formatStatsMessage(title, stats, period, dailyGoal) {
-        let message = `📊 ${title}\n\n`;
+    static formatStatsMessage(title, stats, period, goal) {
+        let message = `📊 ${title}:\n\n`;
 
-        if (period === 'today') {
-            message += this.formatDailyStats(stats, dailyGoal);
-        } else if (period === 'all') {
-            message += this.formatAllTimeStats(stats);
+        if (period === KEYBOARD.periods.today.id) {
+            message += this.formatDailyStats(stats, goal);
         } else {
-            message += this.formatPeriodStats(stats);
+            message += `Всего выпито: ${stats.total}л\n`;
+            message += `В среднем: ${stats.average}л в день\n`;
+            if (stats.maxDay) {
+                message += `\nЛучший день: ${stats.maxDay.date} (${stats.maxDay.amount}л)\n`;
+            }
         }
 
         return message;
