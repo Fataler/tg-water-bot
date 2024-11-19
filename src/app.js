@@ -5,11 +5,24 @@ const commandHandler = require('./handlers/command.handler');
 const callbackHandler = require('./handlers/callback.handler');
 const messageHandler = require('./handlers/message.handler');
 const logger = require('./config/logger.config');
+const config = require('./config/config');
+const fs = require('fs');
+const path = require('path');
 
 class App {
     async start() {
         try {
             logger.info('Starting Water Reminder Bot...');
+            
+            // Логируем режим запуска
+            const isDocker = process.env.IS_DOCKER === 'true';
+            logger.info(`Running in ${isDocker ? 'Docker' : 'Local'} mode`);
+            logger.info(`Database path: ${config.database.path}`);
+            
+            // Проверяем существование базы данных
+            const dbExists = fs.existsSync(path.resolve(config.database.path));
+            logger.info(`Database ${dbExists ? 'found' : 'not found'} at path: ${config.database.path}`);
+            
             logger.info('Initializing database...');
             await dbService.init();
             logger.info('Database initialized successfully');
