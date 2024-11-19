@@ -16,13 +16,13 @@ class KeyboardUtil {
             reply_markup: {
                 inline_keyboard: [
                     [
-                        { 
-                            text: KEYBOARD.drinks.water.text, 
-                            callback_data: `drink_${KEYBOARD.drinks.water.id}_${message_id}` 
+                        {
+                            text: KEYBOARD.drinks.water.text,
+                            callback_data: `drink_${KEYBOARD.drinks.water.id}_${message_id}`,
                         },
-                        { 
-                            text: KEYBOARD.drinks.other.text, 
-                            callback_data: `drink_${KEYBOARD.drinks.other.id}_${message_id}` 
+                        {
+                            text: KEYBOARD.drinks.other.text,
+                            callback_data: `drink_${KEYBOARD.drinks.other.id}_${message_id}`,
                         },
                     ],
                 ],
@@ -34,14 +34,18 @@ class KeyboardUtil {
         return {
             reply_markup: {
                 inline_keyboard: [
-                    [{ 
-                        text: KEYBOARD.settings.goal.text, 
-                        callback_data: `settings_${KEYBOARD.settings.goal.id}` 
-                    }],
-                    [{ 
-                        text: KEYBOARD.settings.reset.text, 
-                        callback_data: KEYBOARD.settings.reset.id 
-                    }],
+                    [
+                        {
+                            text: KEYBOARD.settings.goal.text,
+                            callback_data: `settings_${KEYBOARD.settings.goal.id}`,
+                        },
+                    ],
+                    [
+                        {
+                            text: KEYBOARD.settings.reset.text,
+                            callback_data: KEYBOARD.settings.reset.id,
+                        },
+                    ],
                 ],
             },
         };
@@ -62,16 +66,18 @@ class KeyboardUtil {
         return {
             reply_markup: {
                 inline_keyboard: [
-                    ...amounts.map(row =>
+                    ...amounts.map((row) =>
                         row.map(([amount, config]) => ({
                             text: config.text,
-                            callback_data: `${type}_${amount}_${message_id}`
+                            callback_data: `${type}_${amount}_${message_id}`,
                         }))
                     ),
-                    [{ 
-                        text: KEYBOARD.amounts.custom.text,
-                        callback_data: `${type}_custom_${message_id}`
-                    }]
+                    [
+                        {
+                            text: KEYBOARD.amounts.custom.text,
+                            callback_data: `${type}_custom_${message_id}`,
+                        },
+                    ],
                 ],
             },
         };
@@ -88,23 +94,23 @@ class KeyboardUtil {
     static getStatsKeyboard(message_id) {
         const periods = [
             [
-                { 
-                    text: KEYBOARD.periods.today.text, 
-                    period: KEYBOARD.periods.today.id 
+                {
+                    text: KEYBOARD.periods.today.text,
+                    period: KEYBOARD.periods.today.id,
                 },
-                { 
-                    text: KEYBOARD.periods.week.text, 
-                    period: KEYBOARD.periods.week.id 
+                {
+                    text: KEYBOARD.periods.week.text,
+                    period: KEYBOARD.periods.week.id,
                 },
             ],
             [
-                { 
-                    text: KEYBOARD.periods.month.text, 
-                    period: KEYBOARD.periods.month.id 
+                {
+                    text: KEYBOARD.periods.month.text,
+                    period: KEYBOARD.periods.month.id,
                 },
-                { 
-                    text: KEYBOARD.periods.all.text, 
-                    period: KEYBOARD.periods.all.id 
+                {
+                    text: KEYBOARD.periods.all.text,
+                    period: KEYBOARD.periods.all.id,
                 },
             ],
         ];

@@ -184,7 +184,7 @@ class DatabaseService {
             if (dailyIntakes.length === 0) {
                 return {
                     total: 0,
-                    average: 0
+                    average: 0,
                 };
             }
 
@@ -201,10 +201,13 @@ class DatabaseService {
             return {
                 total: Number(total.toFixed(2)),
                 average,
-                maxDay: dailyIntakes.length > 0 ? {
-                    date: maxDay.date,
-                    amount: maxDay.total
-                } : null
+                maxDay:
+                    dailyIntakes.length > 0
+                        ? {
+                            date: maxDay.date,
+                            amount: maxDay.total,
+                        }
+                        : null,
             };
         } catch (error) {
             logger.error('Error getting water intake history:', error);
@@ -293,10 +296,10 @@ class DatabaseService {
 
             // Удаляем записи о потреблении воды
             this.db.prepare('DELETE FROM water_intake WHERE user_id = ?').run(user.id);
-            
+
             // Удаляем пользователя
             this.db.prepare('DELETE FROM users WHERE chat_id = ?').run(chatId);
-            
+
             logger.info('User deleted successfully:', chatId);
         } catch (error) {
             logger.error('Error deleting user:', error);

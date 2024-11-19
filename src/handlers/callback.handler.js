@@ -21,7 +21,8 @@ class CallbackHandler {
         stats: (chatId, data, messageId) => this.handleStatsCallback(chatId, data, messageId),
         settings: (chatId, data, messageId) => this.handleSettingsCallback(chatId, data, messageId),
         reset: (chatId, data, messageId) => this.handleResetCallback(chatId, data, messageId),
-        'reset-confirm': (chatId, data, messageId) => this.handleResetConfirmCallback(chatId, data, messageId),
+        'reset-confirm': (chatId, data, messageId) =>
+            this.handleResetConfirmCallback(chatId, data, messageId),
     };
 
     async handleCallback(query) {
@@ -50,10 +51,7 @@ class CallbackHandler {
         const goal = data.split('_')[1];
 
         if (goal === 'custom') {
-            await telegramService.sendMessage(
-                chatId,
-                MESSAGE.prompts.goal.set
-            );
+            await telegramService.sendMessage(chatId, MESSAGE.prompts.goal.set);
             this.userTemp.set(chatId, { waitingFor: 'custom_goal' });
             return;
         }
@@ -72,9 +70,16 @@ class CallbackHandler {
 
     async handleDrinkIntake(chatId, amount, type = KEYBOARD.drinks.water.id) {
         if (amount === 'custom') {
-            const message = type === KEYBOARD.drinks.water.id
-                ? MESSAGE.prompts.water.amount(config.validation.water.minAmount, config.validation.water.maxAmount)
-                : MESSAGE.prompts.other.amount(config.validation.water.minAmount, config.validation.water.maxAmount);
+            const message =
+                type === KEYBOARD.drinks.water.id
+                    ? MESSAGE.prompts.water.amount(
+                        config.validation.water.minAmount,
+                        config.validation.water.maxAmount
+                    )
+                    : MESSAGE.prompts.other.amount(
+                        config.validation.water.minAmount,
+                        config.validation.water.maxAmount
+                    );
             await telegramService.sendMessage(chatId, message);
             this.userTemp.set(chatId, { waitingFor: `custom_${type}` });
             return;
@@ -84,7 +89,10 @@ class CallbackHandler {
         if (!ValidationUtil.isValidAmount(numAmount)) {
             await telegramService.sendMessage(
                 chatId,
-                MESSAGE.errors.validation.amount(config.validation.water.minAmount, config.validation.water.maxAmount)
+                MESSAGE.errors.validation.amount(
+                    config.validation.water.minAmount,
+                    config.validation.water.maxAmount
+                )
             );
             return;
         }
@@ -147,19 +155,19 @@ class CallbackHandler {
         const [_, setting] = data.split('_');
 
         switch (setting) {
-            case KEYBOARD.settings.goal.id:
-                await telegramService.sendMessage(
-                    chatId,
-                    MESSAGE.prompts.goal.custom,
-                    KeyboardUtil.getGoalKeyboard()
-                );
-                break;
-            default:
-                await telegramService.sendMessage(
-                    chatId,
-                    MESSAGE.prompts.default,
-                    KeyboardUtil.getMainKeyboard()
-                );
+        case KEYBOARD.settings.goal.id:
+            await telegramService.sendMessage(
+                chatId,
+                MESSAGE.prompts.goal.custom,
+                KeyboardUtil.getGoalKeyboard()
+            );
+            break;
+        default:
+            await telegramService.sendMessage(
+                chatId,
+                MESSAGE.prompts.default,
+                KeyboardUtil.getMainKeyboard()
+            );
         }
     }
 
@@ -168,13 +176,13 @@ class CallbackHandler {
             reply_markup: {
                 inline_keyboard: [
                     [
-                        { 
-                            text: KEYBOARD.reset.confirm.text, 
-                            callback_data: `reset-confirm_${KEYBOARD.reset.confirm.id}` 
+                        {
+                            text: KEYBOARD.reset.confirm.text,
+                            callback_data: `reset-confirm_${KEYBOARD.reset.confirm.id}`,
                         },
-                        { 
-                            text: KEYBOARD.reset.cancel.text, 
-                            callback_data: `reset-confirm_${KEYBOARD.reset.cancel.id}` 
+                        {
+                            text: KEYBOARD.reset.cancel.text,
+                            callback_data: `reset-confirm_${KEYBOARD.reset.cancel.id}`,
                         },
                     ],
                 ],
@@ -182,11 +190,7 @@ class CallbackHandler {
         };
 
         await telegramService.deleteMessage(chatId, messageId);
-        await telegramService.sendMessage(
-            chatId,
-            MESSAGE.prompts.reset.confirm,
-            confirmKeyboard
-        );
+        await telegramService.sendMessage(chatId, MESSAGE.prompts.reset.confirm, confirmKeyboard);
     }
 
     async handleDrinkTypeCallback(chatId, data, messageId) {
@@ -198,25 +202,37 @@ class CallbackHandler {
             if (type === KEYBOARD.drinks.water.id) {
                 const message = await telegramService.sendMessage(
                     chatId,
-                    MESSAGE.prompts.water.amount(config.validation.water.minAmount, config.validation.water.maxAmount),
+                    MESSAGE.prompts.water.amount(
+                        config.validation.water.minAmount,
+                        config.validation.water.maxAmount
+                    ),
                     KeyboardUtil.getWaterAmountKeyboard(0)
                 );
                 await telegramService.editMessage(
                     chatId,
                     message.message_id,
-                    MESSAGE.prompts.water.amount(config.validation.water.minAmount, config.validation.water.maxAmount),
+                    MESSAGE.prompts.water.amount(
+                        config.validation.water.minAmount,
+                        config.validation.water.maxAmount
+                    ),
                     KeyboardUtil.getWaterAmountKeyboard(message.message_id)
                 );
             } else if (type === KEYBOARD.drinks.other.id) {
                 const message = await telegramService.sendMessage(
                     chatId,
-                    MESSAGE.prompts.other.amount(config.validation.water.minAmount, config.validation.water.maxAmount),
+                    MESSAGE.prompts.other.amount(
+                        config.validation.water.minAmount,
+                        config.validation.water.maxAmount
+                    ),
                     KeyboardUtil.getOtherAmountKeyboard(0)
                 );
                 await telegramService.editMessage(
                     chatId,
                     message.message_id,
-                    MESSAGE.prompts.other.amount(config.validation.water.minAmount, config.validation.water.maxAmount),
+                    MESSAGE.prompts.other.amount(
+                        config.validation.water.minAmount,
+                        config.validation.water.maxAmount
+                    ),
                     KeyboardUtil.getOtherAmountKeyboard(message.message_id)
                 );
             }
@@ -245,22 +261,22 @@ class CallbackHandler {
             let title;
 
             switch (period) {
-                case KEYBOARD.periods.today.id:
-                    stats = await dbService.getDailyWaterIntake(chatId);
-                    title = MESSAGE.stats.today;
-                    break;
-                case KEYBOARD.periods.week.id:
-                    stats = await dbService.getWaterIntakeHistory(chatId, 7);
-                    title = MESSAGE.stats.week;
-                    break;
-                case KEYBOARD.periods.month.id:
-                    stats = await dbService.getWaterIntakeHistory(chatId, 30);
-                    title = MESSAGE.stats.month;
-                    break;
-                case KEYBOARD.periods.all.id:
-                    stats = await dbService.getWaterStats(chatId);
-                    title = MESSAGE.stats.all;
-                    break;
+            case KEYBOARD.periods.today.id:
+                stats = await dbService.getDailyWaterIntake(chatId);
+                title = MESSAGE.stats.today;
+                break;
+            case KEYBOARD.periods.week.id:
+                stats = await dbService.getWaterIntakeHistory(chatId, 7);
+                title = MESSAGE.stats.week;
+                break;
+            case KEYBOARD.periods.month.id:
+                stats = await dbService.getWaterIntakeHistory(chatId, 30);
+                title = MESSAGE.stats.month;
+                break;
+            case KEYBOARD.periods.all.id:
+                stats = await dbService.getWaterStats(chatId);
+                title = MESSAGE.stats.all;
+                break;
             }
 
             const message = MESSAGE.stats.message(title, stats, period, user.daily_goal);
@@ -282,10 +298,7 @@ class CallbackHandler {
         if (action === KEYBOARD.reset.confirm.id) {
             await dbService.deleteUser(chatId);
             notificationService.cancelUserReminders(chatId);
-            await telegramService.sendMessage(
-                chatId,
-                MESSAGE.success.reset
-            );
+            await telegramService.sendMessage(chatId, MESSAGE.success.reset);
         } else {
             await telegramService.sendMessage(
                 chatId,

@@ -32,37 +32,37 @@ class MessageHandler {
         }
 
         switch (userTemp.waitingFor) {
-            case 'custom_goal':
-                if (ValidationUtil.isValidGoal(amount)) {
-                    await dbService.addUser(chatId, amount);
-                    await telegramService.sendMessage(
-                        chatId,
-                        '🎯 Цель установлена! Можешь начинать отслеживать потребление воды.',
-                        KeyboardUtil.getMainKeyboard()
-                    );
-                } else {
-                    await telegramService.sendMessage(
-                        chatId,
-                        `⚠️ Цель должна быть от ${config.validation.water.minAmount} до ${config.validation.water.maxAmount * 2} литров.`
-                    );
-                }
-                break;
+        case 'custom_goal':
+            if (ValidationUtil.isValidGoal(amount)) {
+                await dbService.addUser(chatId, amount);
+                await telegramService.sendMessage(
+                    chatId,
+                    '🎯 Цель установлена! Можешь начинать отслеживать потребление воды.',
+                    KeyboardUtil.getMainKeyboard()
+                );
+            } else {
+                await telegramService.sendMessage(
+                    chatId,
+                    `⚠️ Цель должна быть от ${config.validation.water.minAmount} до ${config.validation.water.maxAmount * 2} литров.`
+                );
+            }
+            break;
 
-            case 'custom_water':
-            case 'custom_other':
-                if (ValidationUtil.isValidAmount(amount)) {
-                    await callbackHandler.handleDrinkIntake(
-                        chatId,
-                        amount,
-                        userTemp.waitingFor === 'custom_water' ? 'water' : 'other'
-                    );
-                } else {
-                    await telegramService.sendMessage(
-                        chatId,
-                        `⚠️ Количество должно быть от ${config.validation.water.minAmount} до ${config.validation.water.maxAmount} литров.`
-                    );
-                }
-                break;
+        case 'custom_water':
+        case 'custom_other':
+            if (ValidationUtil.isValidAmount(amount)) {
+                await callbackHandler.handleDrinkIntake(
+                    chatId,
+                    amount,
+                    userTemp.waitingFor === 'custom_water' ? 'water' : 'other'
+                );
+            } else {
+                await telegramService.sendMessage(
+                    chatId,
+                    `⚠️ Количество должно быть от ${config.validation.water.minAmount} до ${config.validation.water.maxAmount} литров.`
+                );
+            }
+            break;
         }
     }
 
