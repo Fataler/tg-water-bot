@@ -12,22 +12,27 @@ class CommandHandler {
 
         if (!user) {
             await telegramService.sendMessage(
-                chatId, 
+                chatId,
                 '👋 Привет! Я помогу тебе следить за потреблением воды. 💧\n\n' +
-                '🎯 Давай для начала установим твою цель на день:',
+                    '🎯 Давай для начала установим твою цель на день:',
                 KeyboardUtil.getGoalKeyboard()
             );
         } else {
             try {
                 await telegramService.sendMessage(
-                    chatId, 
+                    chatId,
                     '👋 С возвращением! Что будем делать? 💪',
                     KeyboardUtil.getMainKeyboard()
                 );
             } catch (error) {
-                if (error.response?.body?.error_code === 403 || error.response?.body?.error_code === 400) {
+                if (
+                    error.response?.body?.error_code === 403 ||
+                    error.response?.body?.error_code === 400
+                ) {
                     await dbService.deleteUser(chatId);
-                    console.log(`Пользователь ${chatId} удален из базы данных (бот заблокирован или удален)`);
+                    console.log(
+                        `Пользователь ${chatId} удален из базы данных (бот заблокирован или удален)`
+                    );
                 }
             }
         }
@@ -40,13 +45,13 @@ class CommandHandler {
                 inline_keyboard: [
                     [
                         { text: '✅ Да, сбросить', callback_data: 'reset_confirm' },
-                        { text: '❌ Нет, отменить', callback_data: 'reset_cancel' }
-                    ]
-                ]
-            }
+                        { text: '❌ Нет, отменить', callback_data: 'reset_cancel' },
+                    ],
+                ],
+            },
         };
         await telegramService.sendMessage(
-            chatId, 
+            chatId,
             '⚠️ Ты уверен(а), что хочешь сбросить все настройки?',
             confirmKeyboard
         );
@@ -64,7 +69,7 @@ class CommandHandler {
     async handleStats(msg) {
         const chatId = msg.chat.id;
         await telegramService.sendMessage(
-            chatId, 
+            chatId,
             '📊 За какой период показать статистику?',
             KeyboardUtil.getStatsKeyboard()
         );
@@ -81,7 +86,7 @@ class CommandHandler {
                     '⚙️ Настройки:',
                     KeyboardUtil.getSettingsKeyboard(user, null)
                 );
-                
+
                 // Then update it with the message ID in the keyboard
                 await telegramService.editMessage(
                     chatId,
@@ -102,7 +107,8 @@ class CommandHandler {
 
     async handleHelp(msg) {
         const chatId = msg.chat.id;
-        const helpText = '🚰 *Помощь по использованию бота*\n\n' +
+        const helpText =
+            '🚰 *Помощь по использованию бота*\n\n' +
             '*Основные команды:*\n' +
             '💧 Добавить воду - записать выпитую воду\n' +
             '📊 Статистика - просмотр статистики потребления\n' +
@@ -134,10 +140,16 @@ class CommandHandler {
                 await telegramService.sendMessage(chatId, '✅ Тестовое уведомление отправлено');
             } catch (error) {
                 console.error('Error sending debug notification:', error);
-                await telegramService.sendMessage(chatId, '❌ Ошибка при отправке тестового уведомления');
+                await telegramService.sendMessage(
+                    chatId,
+                    '❌ Ошибка при отправке тестового уведомления'
+                );
             }
         } else {
-            await telegramService.sendMessage(chatId, '⛔️ У вас нет прав для использования этой команды');
+            await telegramService.sendMessage(
+                chatId,
+                '⛔️ У вас нет прав для использования этой команды'
+            );
         }
     }
 

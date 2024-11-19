@@ -18,7 +18,7 @@ class CallbackHandler {
         drink: (chatId, data, messageId) => this.handleDrinkTypeCallback(chatId, data, messageId),
         stats: (chatId, data, messageId) => this.handleStatsCallback(chatId, data, messageId),
         settings: (chatId, data, messageId) => this.handleSettingsCallback(chatId, data, messageId),
-        reset: (chatId, data, messageId) => this.handleResetCallback(chatId, data, messageId)
+        reset: (chatId, data, messageId) => this.handleResetCallback(chatId, data, messageId),
     };
 
     async handleCallback(query) {
@@ -47,9 +47,12 @@ class CallbackHandler {
 
     async handleGoalCallback(chatId, data, messageId) {
         const goal = data.split('_')[1];
-        
+
         if (goal === 'custom') {
-            await telegramService.sendMessage(chatId, '🎯 Сколько литров воды в день ты хочешь выпивать? (например: 2.5л):');
+            await telegramService.sendMessage(
+                chatId,
+                '🎯 Сколько литров воды в день ты хочешь выпивать? (например: 2.5л):'
+            );
             this.userTemp.set(chatId, { waitingFor: 'custom_goal' });
             return;
         }
@@ -57,10 +60,10 @@ class CallbackHandler {
         const numGoal = parseFloat(goal);
         if (ValidationUtil.isValidGoal(numGoal)) {
             await dbService.addUser(chatId, numGoal);
-            
+
             // Запускаем умные напоминания
             await notificationService.updateUserReminder(chatId);
-            
+
             await telegramService.sendMessage(
                 chatId,
                 MessageUtil.formatGoalSetMessage(numGoal),
@@ -71,9 +74,10 @@ class CallbackHandler {
 
     async handleDrinkIntake(chatId, amount, type = 'water') {
         if (amount === 'custom') {
-            const message = type === 'water' 
-                ? '💧 Сколько литров воды ты выпил(а)? (например: 0.5):'
-                : '🥤 Сколько литров напитка ты выпил(а)? (например: 0.5):';
+            const message =
+                type === 'water'
+                    ? `💧 Сколько литров воды ты выпил(а)? (от ${config.validation.water.minAmount} до ${config.validation.water.maxAmount}л):`
+                    : `🥤 Сколько литров напитка ты выпил(а)? (от ${config.validation.water.minAmount} до ${config.validation.water.maxAmount}л):`;
             await telegramService.sendMessage(chatId, message);
             this.userTemp.set(chatId, { waitingFor: `custom_${type}` });
             return;
@@ -81,7 +85,10 @@ class CallbackHandler {
 
         const numAmount = parseFloat(amount);
         if (!ValidationUtil.isValidAmount(numAmount)) {
-            await telegramService.sendMessage(chatId, '⚠️ Некорректное количество. Попробуйте еще раз.');
+            await telegramService.sendMessage(
+                chatId,
+                `⚠️ Количество должно быть от ${config.validation.water.minAmount} до ${config.validation.water.maxAmount} литров.`
+            );
             return;
         }
 
@@ -92,15 +99,19 @@ class CallbackHandler {
             const goal = user.daily_goal;
 
             await notificationService.updateUserReminder(chatId);
-            
+
             await telegramService.sendMessage(
                 chatId,
                 MessageUtil.formatWaterAddedMessage(numAmount, dailyIntake, goal),
                 KeyboardUtil.getMainKeyboard()
             );
         } catch (error) {
-            console.error(`Error adding ${type}:`, error);
-            await telegramService.sendMessage(chatId, '❌ Произошла ошибка. Попробуйте еще раз.');
+            console.error('Error adding water intake:', error);
+            await telegramService.sendMessage(
+                chatId,
+                '❌ Произошла ошибка при добавлении записи. Попробуйте еще раз.',
+                KeyboardUtil.getMainKeyboard()
+            );
         }
     }
 
@@ -122,15 +133,15 @@ class CallbackHandler {
 
     async handleStatsCallback(chatId, data, messageId) {
         const [_, period] = data.split('_');
-        
+
         await telegramService.deleteMessage(chatId, messageId);
-        
+
         await this.showStats(chatId, period);
     }
 
     async handleSettingsCallback(chatId, data, messageId) {
         const [_, setting] = data.split('_');
-        
+
         switch (setting) {
             case 'goal':
                 await telegramService.sendMessage(
@@ -168,11 +179,11 @@ class CallbackHandler {
 
     async handleDrinkTypeCallback(chatId, data, messageId) {
         const type = data.split('_')[1];
-        
+
         try {
             // Удаляем сообщение с выбором типа напитка
             await telegramService.deleteMessage(chatId, messageId);
-            
+
             if (type === 'water') {
                 const message = await telegramService.sendMessage(
                     chatId,
@@ -209,10 +220,10 @@ class CallbackHandler {
         const dailyIntake = await dbService.getDailyWaterIntake(chatId);
         const user = await dbService.getUser(chatId);
         const goal = user.daily_goal;
-        
+
         let message = '📊 Статистика потребления жидкости:\n\n';
         message += MessageUtil.formatDailyStats(dailyIntake, goal, { showEmoji: false });
-        
+
         await telegramService.sendMessage(chatId, message);
     }
 

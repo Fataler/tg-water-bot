@@ -30,7 +30,7 @@ class DatabaseService {
             logger.info('Initializing database connection...');
             const dbPath = this.getDbPath();
             const dbDir = path.dirname(dbPath);
-            
+
             if (!fs.existsSync(dbDir)) {
                 fs.mkdirSync(dbDir, { recursive: true });
                 logger.info(`Created database directory: ${dbDir}`);
@@ -49,11 +49,15 @@ class DatabaseService {
         try {
             const user = await this.getUser(userId);
             if (user) {
-                this.db.prepare('UPDATE users SET daily_goal = ? WHERE chat_id = ?').run(dailyGoal, userId);
+                this.db
+                    .prepare('UPDATE users SET daily_goal = ? WHERE chat_id = ?')
+                    .run(dailyGoal, userId);
                 return user;
             }
-            
-            const result = this.db.prepare('INSERT INTO users (chat_id, daily_goal) VALUES (?, ?)').run(userId, dailyGoal);
+
+            const result = this.db
+                .prepare('INSERT INTO users (chat_id, daily_goal) VALUES (?, ?)')
+                .run(userId, dailyGoal);
             return { id: result.lastInsertRowid, chat_id: userId, daily_goal: dailyGoal };
         } catch (error) {
             logger.error('Error adding user:', error);
@@ -77,11 +81,11 @@ class DatabaseService {
                 logger.error('User not found for water intake:', userId);
                 throw new Error('User not found');
             }
-            
-            const result = this.db.prepare(
-                'INSERT INTO water_intake (user_id, amount, drink_type) VALUES (?, ?, ?)'
-            ).run(user.id, amount, drinkType);
-            
+
+            const result = this.db
+                .prepare('INSERT INTO water_intake (user_id, amount, drink_type) VALUES (?, ?, ?)')
+                .run(user.id, amount, drinkType);
+
             return result.lastInsertRowid;
         } catch (error) {
             logger.error('Error adding water intake:', error);
@@ -94,7 +98,9 @@ class DatabaseService {
             const user = await this.getUser(userId);
             if (!user) throw new Error('User not found');
 
-            const result = this.db.prepare(`
+            const result = this.db
+                .prepare(
+                    `
                 SELECT 
                     ROUND(COALESCE(SUM(CASE WHEN drink_type = 'water' THEN amount ELSE 0 END), 0), 2) as water,
                     ROUND(COALESCE(SUM(CASE WHEN drink_type != 'water' THEN amount ELSE 0 END), 0), 2) as other,
@@ -102,12 +108,14 @@ class DatabaseService {
                 FROM water_intake
                 WHERE user_id = ?
                 AND date(timestamp) = date('now', 'localtime')
-            `).get(user.id);
+            `
+                )
+                .get(user.id);
 
             return {
                 water: Number(result.water),
                 other: Number(result.other),
-                total: Number(result.total)
+                total: Number(result.total),
             };
         } catch (error) {
             logger.error('Error getting daily water intake:', error);
@@ -122,12 +130,12 @@ class DatabaseService {
 
             const updates = [];
             const params = [];
-            
+
             if (settings.hasOwnProperty('daily_goal')) {
                 updates.push('daily_goal = ?');
                 params.push(settings.daily_goal);
             }
-            
+
             if (settings.hasOwnProperty('notification_time')) {
                 updates.push('notification_time = ?');
                 params.push(settings.notification_time);
@@ -156,7 +164,9 @@ class DatabaseService {
             const user = await this.getUser(userId);
             if (!user) throw new Error('User not found');
 
-            return this.db.prepare(`
+            return this.db
+                .prepare(
+                    `
                 SELECT 
                     date(timestamp, 'localtime') as date,
                     ROUND(COALESCE(SUM(CASE WHEN drink_type = 'water' THEN amount ELSE 0 END), 0), 2) as water,
@@ -167,7 +177,9 @@ class DatabaseService {
                 GROUP BY date(timestamp, 'localtime')
                 ORDER BY date DESC
                 LIMIT ?
-            `).all(user.id, limit);
+            `
+                )
+                .all(user.id, limit);
         } catch (error) {
             logger.error('Error getting water intake history:', error);
             throw error;
@@ -176,11 +188,15 @@ class DatabaseService {
 
     async getUsersForNotification(time) {
         try {
-            return this.db.prepare(`
+            return this.db
+                .prepare(
+                    `
                 SELECT * FROM users 
                 WHERE notification_time = ? 
                 AND notification_enabled = 1
-            `).all(time);
+            `
+                )
+                .all(time);
         } catch (error) {
             logger.error('Error getting users for notification:', error);
             throw error;
@@ -201,7 +217,9 @@ class DatabaseService {
             const user = await this.getUser(userId);
             if (!user) throw new Error('User not found');
 
-            const stats = this.db.prepare(`
+            const stats = this.db
+                .prepare(
+                    `
                 WITH daily_totals AS (
                     SELECT 
                         date(timestamp, 'localtime') as date,
@@ -222,14 +240,16 @@ class DatabaseService {
                         LIMIT 1
                     ) as max_date
                 FROM daily_totals
-            `).get(user.id);
+            `
+                )
+                .get(user.id);
 
             return {
                 days: stats.days,
                 total: stats.total || 0,
                 average: stats.average || 0,
                 max: stats.max || 0,
-                maxDate: stats.max_date || 'Нет данных'
+                maxDate: stats.max_date || 'Нет данных',
             };
         } catch (error) {
             logger.error('Error getting water stats:', error);

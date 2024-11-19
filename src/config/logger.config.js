@@ -15,10 +15,7 @@ const logger = winston.createLogger({
     transports: [
         // Console logging
         new winston.transports.Console({
-            format: winston.format.combine(
-                winston.format.colorize(),
-                logFormat
-            )
+            format: winston.format.combine(winston.format.colorize(), logFormat),
         }),
         // Error logging
         new winston.transports.File({
@@ -32,8 +29,8 @@ const logger = winston.createLogger({
             filename: path.join('logs', 'combined.log'),
             maxsize: 5242880, // 5MB
             maxFiles: 5,
-        })
-    ]
+        }),
+    ],
 });
 
 // Log unhandled rejections

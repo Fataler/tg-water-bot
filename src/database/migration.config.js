@@ -36,10 +36,13 @@ const umzug = new Umzug({
     storage: {
         async executed() {
             const results = db.prepare('SELECT name FROM migrations').all();
-            return results.map(row => row.name);
+            return results.map((row) => row.name);
         },
         async logMigration({ name }) {
-            db.prepare('INSERT INTO migrations (name, executed_at) VALUES (?, ?)').run(name, Date.now());
+            db.prepare('INSERT INTO migrations (name, executed_at) VALUES (?, ?)').run(
+                name,
+                Date.now()
+            );
         },
         async unlogMigration({ name }) {
             db.prepare('DELETE FROM migrations WHERE name = ?').run(name);

@@ -3,9 +3,12 @@ const path = require('path');
 const logger = require('../config/logger.config');
 
 function createMigration() {
-    const timestamp = new Date().toISOString().replace(/[^0-9]/g, '').slice(0, -3);
+    const timestamp = new Date()
+        .toISOString()
+        .replace(/[^0-9]/g, '')
+        .slice(0, -3);
     const name = process.argv[2];
-    
+
     if (!name) {
         logger.error('Please provide a migration name');
         logger.info('Usage: npm run migrate:create [migration-name]');

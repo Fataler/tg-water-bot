@@ -3,9 +3,11 @@ const config = require('../config/config');
 class ValidationUtil {
     static isValidAmount(amount) {
         const numAmount = parseFloat(amount);
-        return !isNaN(numAmount) && 
-               numAmount >= config.validation.water.minAmount && 
-               numAmount <= config.validation.water.maxAmount;
+        return (
+            !isNaN(numAmount) &&
+            numAmount >= config.validation.water.minAmount &&
+            numAmount <= config.validation.water.maxAmount
+        );
     }
 
     static isValidWaterAmount(amount) {
@@ -14,9 +16,11 @@ class ValidationUtil {
 
     static isValidGoal(goal) {
         const numGoal = parseFloat(goal);
-        return !isNaN(numGoal) && 
-               numGoal >= config.validation.water.minAmount && 
-               numGoal <= config.validation.water.maxAmount * 2;
+        return (
+            !isNaN(numGoal) &&
+            numGoal >= config.validation.water.minAmount &&
+            numGoal <= config.validation.water.maxAmount * 2
+        );
     }
 
     static isValidTime(time) {

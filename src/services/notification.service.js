@@ -15,11 +15,11 @@ class NotificationService {
 
     async scheduleReminders() {
         try {
-            this.jobs.forEach(job => job.cancel());
+            this.jobs.forEach((job) => job.cancel());
             this.jobs.clear();
 
             const users = await dbService.getAllUsers();
-            users.forEach(user => {
+            users.forEach((user) => {
                 if (user.notification_enabled) {
                     this.scheduleUserReminder(user);
                 }
@@ -37,7 +37,7 @@ class NotificationService {
     getCurrentPeriod() {
         const hour = new Date().getHours();
         const { periods } = config.notifications;
-        
+
         if (hour >= periods.morning.start && hour < periods.morning.end) return 'morning';
         if (hour >= periods.day.start && hour < periods.day.end) return 'day';
         if (hour >= periods.evening.start && hour < periods.evening.end) return 'evening';
@@ -84,7 +84,7 @@ class NotificationService {
         const currentHour = new Date().getHours();
         const hoursIntoPeriod = currentHour - periodConfig.start;
         const periodProgress = hoursIntoPeriod / periodLength;
-        
+
         expected += periodConfig.targetPercent * periodProgress;
         return expected;
     }
@@ -105,7 +105,7 @@ class NotificationService {
 
             const today = new Date();
             const dailyIntake = await dbService.getDailyWaterIntake(user.user_id, today);
-            
+
             if (dailyIntake.total >= user.daily_goal) return;
 
             // Проверяем, нужно ли отправлять уведомление
@@ -117,14 +117,15 @@ class NotificationService {
             const expectedProgress = this.getExpectedProgress(period);
 
             const reminderMessage = ReminderUtil.getRandomMessage();
-            const message = `${reminderMessage}\n\n` +
-                          'Сегодня вы выпили:\n' +
-                          `💧 Вода: ${dailyIntake.water}л\n` +
-                          `🥤 Другие напитки: ${dailyIntake.other}л\n` +
-                          `📊 Всего: ${dailyIntake.total}л из ${user.daily_goal}л\n\n` +
-                          `Текущий прогресс: ${percentage}%\n` +
-                          `Ожидаемый прогресс: ${expectedProgress.toFixed(1)}%\n` +
-                          progressBar;
+            const message =
+                `${reminderMessage}\n\n` +
+                'Сегодня вы выпили:\n' +
+                `💧 Вода: ${dailyIntake.water}л\n` +
+                `🥤 Другие напитки: ${dailyIntake.other}л\n` +
+                `📊 Всего: ${dailyIntake.total}л из ${user.daily_goal}л\n\n` +
+                `Текущий прогресс: ${percentage}%\n` +
+                `Ожидаемый прогресс: ${expectedProgress.toFixed(1)}%\n` +
+                progressBar;
 
             await telegramService.sendMessage(user.user_id, message);
 
@@ -146,8 +147,9 @@ class NotificationService {
     }
 
     updateUserReminder(chatId) {
-        return dbService.getUser(chatId)
-            .then(user => {
+        return dbService
+            .getUser(chatId)
+            .then((user) => {
                 if (user && user.notification_enabled) {
                     const oldJob = this.jobs.get(chatId);
                     if (oldJob) {
@@ -156,7 +158,7 @@ class NotificationService {
                     this.scheduleUserReminder(user);
                 }
             })
-            .catch(error => {
+            .catch((error) => {
                 console.error('Error updating user reminder:', error);
             });
     }

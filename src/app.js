@@ -13,12 +13,14 @@ class App {
     async start() {
         try {
             logger.info('Starting Water Reminder Bot...');
-            
+
             // Логируем режим запуска и состояние базы данных
             logger.info(`Running in ${dbService.getMode()} mode`);
             logger.info(`Database path: ${dbService.getDbPath()}`);
-            logger.info(`Database ${dbService.exists() ? 'found' : 'not found'} at path: ${dbService.getDbPath()}`);
-            
+            logger.info(
+                `Database ${dbService.exists() ? 'found' : 'not found'} at path: ${dbService.getDbPath()}`
+            );
+
             logger.info('Initializing database...');
             await dbService.init();
             logger.info('Database initialized successfully');

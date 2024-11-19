@@ -5,12 +5,12 @@ async function runMigrations() {
     try {
         logger.info('Starting database migrations...');
         const migrations = await umzug.up();
-        
+
         if (migrations.length === 0) {
             logger.info('No new migrations to run');
         } else {
             logger.info(`Executed ${migrations.length} migrations successfully`);
-            migrations.forEach(migration => {
+            migrations.forEach((migration) => {
                 logger.info(`- ${migration.name}`);
             });
         }

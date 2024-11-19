@@ -31,12 +31,14 @@ class TelegramService {
             return await this.bot.editMessageText(text, {
                 chat_id: chatId,
                 message_id: messageId,
-                ...options
+                ...options,
             });
         } catch (error) {
             // Ignore "message is not modified" errors as they're not really errors
-            if (error.response?.body?.error_code === 400 && 
-                error.response?.body?.description?.includes('message is not modified')) {
+            if (
+                error.response?.body?.error_code === 400 &&
+                error.response?.body?.description?.includes('message is not modified')
+            ) {
                 return;
             }
             console.error(`Error editing message ${messageId} in chat ${chatId}:`, error);
