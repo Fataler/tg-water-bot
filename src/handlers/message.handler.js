@@ -3,6 +3,7 @@ const dbService = require('../services/database.service');
 const KeyboardUtil = require('../utils/keyboard.util');
 const ValidationUtil = require('../utils/validation.util');
 const callbackHandler = require('./callback.handler');
+const config = require('../config');
 
 class MessageHandler {
     async handleMessage(msg) {
@@ -24,7 +25,7 @@ class MessageHandler {
         if (!amount) {
             await telegramService.sendMessage(
                 chatId,
-                'Пожалуйста, введите корректное число.',
+                'Укажи корректное число.',
                 KeyboardUtil.getMainKeyboard()
             );
             return;
@@ -36,13 +37,13 @@ class MessageHandler {
                     await dbService.addUser(chatId, amount, '12:00');
                     await telegramService.sendMessage(
                         chatId,
-                        'Отлично! Теперь выберите время для напоминаний:',
+                        'Отлично! В какое время напомнить о воде?',
                         KeyboardUtil.createTimeKeyboard()
                     );
                 } else {
                     await telegramService.sendMessage(
                         chatId,
-                        `Пожалуйста, введите число от ${config.validation.water.minAmount} до ${config.validation.water.maxAmount * 2} литров.`
+                        `Укажи число от ${config.validation.water.minAmount} до ${config.validation.water.maxAmount * 2} литров.`
                     );
                 }
                 break;
@@ -53,7 +54,7 @@ class MessageHandler {
                 } else {
                     await telegramService.sendMessage(
                         chatId,
-                        `Пожалуйста, введите число от ${config.validation.water.minAmount} до ${config.validation.water.maxAmount} литров.`
+                        `Укажи число от ${config.validation.water.minAmount} до ${config.validation.water.maxAmount} литров.`
                     );
                 }
                 break;

@@ -20,7 +20,7 @@ class NotificationService {
 
             const users = await dbService.getAllUsers();
             users.forEach(user => {
-                if (!user.do_not_disturb) {
+                if (user.notification_enabled) {
                     this.scheduleUserReminder(user);
                 }
             });
@@ -101,7 +101,7 @@ class NotificationService {
 
     async sendReminder(user) {
         try {
-            if (user.do_not_disturb) return;
+            if (!user.notification_enabled) return;
 
             const today = new Date();
             const dailyIntake = await dbService.getDailyWaterIntake(user.user_id, today);
@@ -148,7 +148,7 @@ class NotificationService {
     updateUserReminder(chatId) {
         return dbService.getUser(chatId)
             .then(user => {
-                if (user && !user.do_not_disturb) {
+                if (user && user.notification_enabled) {
                     const oldJob = this.jobs.get(chatId);
                     if (oldJob) {
                         oldJob.cancel();

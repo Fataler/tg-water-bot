@@ -44,7 +44,7 @@ class CallbackHandler {
         const goal = data.split('_')[1];
         
         if (goal === 'custom') {
-            await telegramService.sendMessage(chatId, '🎯 Введите желаемую цель в литрах (например: 2.5л):');
+            await telegramService.sendMessage(chatId, '🎯 Сколько литров воды в день ты хочешь выпивать? (например: 2.5л):');
             this.userTemp.set(chatId, { waitingFor: 'custom_goal' });
             return;
         }
@@ -76,7 +76,7 @@ class CallbackHandler {
         await telegramService.deleteMessage(chatId, messageId);
         
         if (amount === 'custom') {
-            await telegramService.sendMessage(chatId, '💧 Введите количество в литрах (например: 0.5):');
+            await telegramService.sendMessage(chatId, '💧 Сколько литров воды ты выпил(а)? (например: 0.5):');
             this.userTemp.set(chatId, { waitingFor: 'custom_water' });
             return;
         }
@@ -118,7 +118,7 @@ class CallbackHandler {
         await telegramService.deleteMessage(chatId, messageId);
         
         if (amount === 'custom') {
-            await telegramService.sendMessage(chatId, '🥤 Введите количество в литрах (например: 0.5):');
+            await telegramService.sendMessage(chatId, '🥤 Сколько литров напитка ты выпил(а)? (например: 0.5):');
             this.userTemp.set(chatId, { waitingFor: 'custom_other' });
             return;
         }
@@ -172,7 +172,7 @@ class CallbackHandler {
             case 'goal':
                 await telegramService.sendMessage(
                     chatId,
-                    'Выберите новую цель:',
+                    'Сколько литров воды в день ты хочешь выпивать?',
                     KeyboardUtil.getGoalKeyboard()
                 );
                 break;
@@ -211,7 +211,7 @@ class CallbackHandler {
             notificationService.cancelUserReminders(chatId);
             await telegramService.sendMessage(
                 chatId,
-                'Все настройки сброшены. Для начала работы введите /start'
+                'Все настройки сброшены. Напиши /start чтобы начать заново'
             );
         } else {
             await telegramService.sendMessage(
@@ -232,25 +232,25 @@ class CallbackHandler {
             if (type === 'water') {
                 const message = await telegramService.sendMessage(
                     chatId,
-                    'Выберите количество воды:',
+                    'Сколько литров воды ты выпил(а)?',
                     KeyboardUtil.getWaterAmountKeyboard()
                 );
                 const editedMessage = await telegramService.editMessage(
                     chatId,
                     message.message_id,
-                    'Выберите количество воды:',
+                    'Сколько литров воды ты выпил(а)?',
                     KeyboardUtil.getWaterAmountKeyboard(message.message_id)
                 );
             } else if (type === 'other') {
                 const message = await telegramService.sendMessage(
                     chatId,
-                    'Выберите количество напитка:',
+                    'Сколько литров напитка ты выпил(а)?',
                     KeyboardUtil.getOtherDrinkAmountKeyboard()
                 );
                 const editedMessage = await telegramService.editMessage(
                     chatId,
                     message.message_id,
-                    'Выберите количество напитка:',
+                    'Сколько литров напитка ты выпил(а)?',
                     KeyboardUtil.getOtherDrinkAmountKeyboard(message.message_id)
                 );
             }

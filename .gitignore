@@ -6,6 +6,7 @@ node_modules/
 
 # Database
 data/*.db
+src/database/migrations/
 
 # Logs
 logs/

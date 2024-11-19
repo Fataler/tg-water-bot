@@ -6,7 +6,9 @@
   "scripts": {
     "start": "node src/app.js",
     "dev": "nodemon src/app.js",
-    "test": "jest"
+    "test": "jest",
+    "migrate": "node src/database/migrate.js",
+    "migrate:create": "node src/database/create-migration.js"
   },
   "engines": {
     "node": "18.x"
@@ -16,7 +18,9 @@
     "dotenv": "^16.0.3",
     "node-schedule": "^2.1.0",
     "node-telegram-bot-api": "^0.61.0",
-    "request": "^2.88.2"
+    "request": "^2.88.2",
+    "umzug": "^3.4.0",
+    "winston": "^3.11.0"
   },
   "devDependencies": {
     "jest": "^29.3.1",

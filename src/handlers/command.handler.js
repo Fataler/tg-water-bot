@@ -56,7 +56,7 @@ class CommandHandler {
         const chatId = msg.chat.id;
         await telegramService.sendMessage(
             chatId,
-            '🥤 Выберите тип напитка:',
+            '🥤 Что ты выпил(а)?',
             KeyboardUtil.getDrinkTypeKeyboard()
         );
     }
@@ -65,7 +65,7 @@ class CommandHandler {
         const chatId = msg.chat.id;
         await telegramService.sendMessage(
             chatId, 
-            '📊 Выберите период:',
+            '📊 За какой период показать статистику?',
             KeyboardUtil.getStatsKeyboard()
         );
     }
