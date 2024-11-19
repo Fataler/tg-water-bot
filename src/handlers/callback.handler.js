@@ -3,6 +3,7 @@ const dbService = require('../services/database.service');
 const notificationService = require('../services/notification.service');
 const KeyboardUtil = require('../utils/keyboard.util');
 const ValidationUtil = require('../utils/validation.util');
+const MessageUtil = require('../utils/message.util');
 const config = require('../config/config');
 
 class CallbackHandler {
@@ -62,12 +63,7 @@ class CallbackHandler {
             
             await telegramService.sendMessage(
                 chatId,
-                '🎉 Отлично! Цель установлена!\n\n' +
-                '🤖 Я буду отправлять тебе умные напоминания в течение дня:\n' +
-                '🌅 Утром (30% от цели)\n' +
-                '☀️ Днём (50% от цели)\n' +
-                '🌆 Вечером (20% от цели)\n\n' +
-                '💪 Давай начнем следить за твоим водным балансом! 💧',
+                MessageUtil.formatGoalSetMessage(numGoal),
                 KeyboardUtil.getMainKeyboard()
             );
         }
@@ -99,7 +95,7 @@ class CallbackHandler {
             
             await telegramService.sendMessage(
                 chatId,
-                this.formatWaterMessage(numAmount, dailyIntake, goal),
+                MessageUtil.formatWaterAddedMessage(numAmount, dailyIntake, goal),
                 KeyboardUtil.getMainKeyboard()
             );
         } catch (error) {
@@ -208,12 +204,16 @@ class CallbackHandler {
         }
     }
 
-    formatWaterMessage(amount, dailyIntake, goal) {
-        return `🎯 Отлично! Добавлено ${ValidationUtil.formatWaterAmount(amount)}!\n\n` +
-               `💧 Вода: ${ValidationUtil.formatWaterAmount(dailyIntake.water)}\n` +
-               `🥤 Другие напитки: ${ValidationUtil.formatWaterAmount(dailyIntake.other)}\n` +
-               `📊 Всего: ${ValidationUtil.formatWaterAmount(dailyIntake.total)} из ${ValidationUtil.formatWaterAmount(goal)}\n\n` +
-               `${dailyIntake.total >= goal ? '🎉 Ты достиг(ла) дневной цели! Так держать! 💪' : '💪 Продолжай в том же духе!'}`;
+    async handleStats(msg) {
+        const chatId = msg.chat.id;
+        const dailyIntake = await dbService.getDailyWaterIntake(chatId);
+        const user = await dbService.getUser(chatId);
+        const goal = user.daily_goal;
+        
+        let message = '📊 Статистика потребления жидкости:\n\n';
+        message += MessageUtil.formatDailyStats(dailyIntake, goal, { showEmoji: false });
+        
+        await telegramService.sendMessage(chatId, message);
     }
 
     async showStats(chatId, period) {
@@ -241,7 +241,7 @@ class CallbackHandler {
                     break;
             }
 
-            const message = this.formatStatsMessage(title, stats, period, user.daily_goal);
+            const message = MessageUtil.formatStatsMessage(title, stats, period, user.daily_goal);
             await telegramService.sendMessage(chatId, message, KeyboardUtil.getMainKeyboard());
         } catch (error) {
             console.error('Error showing stats:', error);
@@ -251,59 +251,6 @@ class CallbackHandler {
                 KeyboardUtil.getMainKeyboard()
             );
         }
-    }
-
-    async handleStats(msg) {
-        const chatId = msg.chat.id;
-        const dailyIntake = await dbService.getDailyWaterIntake(chatId);
-        const user = await dbService.getUser(chatId);
-        const goal = user.daily_goal;
-        
-        let message = '📊 Статистика потребления жидкости:\n\n';
-        message += `💧 Вода: ${ValidationUtil.formatWaterAmount(dailyIntake.water)}\n`;
-        message += `🥤 Другие напитки: ${ValidationUtil.formatWaterAmount(dailyIntake.other)}\n`;
-        message += `📊 Всего: ${ValidationUtil.formatWaterAmount(dailyIntake.total)} из ${ValidationUtil.formatWaterAmount(goal)}\n\n`;
-        
-        const percentage = Math.round((dailyIntake.total / goal) * 100);
-        message += `Прогресс: ${percentage}%\n`;
-        message += this.getProgressBar(percentage);
-        
-        await telegramService.sendMessage(chatId, message);
-    }
-
-    getProgressBar(percentage) {
-        const filledCount = Math.floor(percentage / 10);
-        const emptyCount = 10 - filledCount;
-        return '🟦'.repeat(filledCount) + '⬜️'.repeat(emptyCount);
-    }
-
-    formatStatsMessage(title, stats, period, dailyGoal) {
-        let message = `📊 ${title}\n\n`;
-
-        if (period === 'today') {
-            const percentage = ValidationUtil.formatPercentage(stats.total, dailyGoal);
-            message += `💧 Вода: ${ValidationUtil.formatWaterAmount(stats.water)}\n`;
-            message += `🥤 Другие напитки: ${ValidationUtil.formatWaterAmount(stats.other)}\n`;
-            message += `📊 Всего: ${ValidationUtil.formatWaterAmount(stats.total)} из ${ValidationUtil.formatWaterAmount(dailyGoal)}\n`;
-            message += `✨ Прогресс: ${percentage}%\n`;
-            message += this.getProgressBar(percentage);
-        } else if (period === 'all') {
-            message += `📅 Дней ведения статистики: ${stats.days}\n`;
-            message += `💧 Общий объем: ${ValidationUtil.formatWaterAmount(stats.total)}\n`;
-            message += `📈 Среднее в день: ${stats.average.toFixed(2)}\n`;
-            message += `🏆 Максимум за день: ${ValidationUtil.formatWaterAmount(stats.max)} (${stats.maxDate})\n`;
-        } else {
-            stats.forEach(day => {
-                const date = new Date(day.date);
-                const formattedDate = date.toLocaleDateString('ru-RU', { weekday: 'short', month: 'short', day: 'numeric' });
-                message += `${formattedDate}:\n`;
-                message += `💧 Вода: ${ValidationUtil.formatWaterAmount(day.water)}\n`;
-                message += `🥤 Другие: ${ValidationUtil.formatWaterAmount(day.other)}\n`;
-                message += `📊 Всего: ${ValidationUtil.formatWaterAmount(day.total)}\n\n`;
-            });
-        }
-
-        return message;
     }
 
     setupHandler() {
