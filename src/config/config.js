@@ -6,7 +6,9 @@ module.exports = {
         options: { polling: true }
     },
     database: {
-        path: process.env.DB_PATH || 'data/water_bot.db'
+        path: process.env.IS_DOCKER === 'true' 
+            ? (process.env.DOCKER_DB_PATH || '/data/water_bot.db')
+            : (process.env.DB_PATH || 'data/water_bot.db')
     },
     server: {
         port: process.env.PORT || 3000,
