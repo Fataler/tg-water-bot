@@ -1,4 +1,5 @@
 const ValidationUtil = require('./validation.util');
+const config = require('../config/config');
 
 class MessageUtil {
     static formatWaterAddedMessage(amount, dailyIntake, goal) {
@@ -51,11 +52,13 @@ class MessageUtil {
     }
 
     static formatGoalSetMessage(goal) {
+        const { morning, day, evening } = config.notifications.periods;
+        
         return '🎉 Отлично! Цель установлена!\n\n' +
                '🤖 Я буду отправлять тебе умные напоминания в течение дня:\n' +
-               '🌅 Утром (30% от цели)\n' +
-               '☀️ Днём (50% от цели)\n' +
-               '🌆 Вечером (20% от цели)\n\n' +
+               `🌅 Утром (${morning.targetPercent}% от цели)\n` +
+               `☀️ Днём (${day.targetPercent}% от цели)\n` +
+               `🌆 Вечером (${evening.targetPercent}% от цели)\n\n` +
                '💪 Давай начнем следить за твоим водным балансом! 💧';
     }
 

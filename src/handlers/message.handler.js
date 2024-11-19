@@ -3,7 +3,7 @@ const dbService = require('../services/database.service');
 const KeyboardUtil = require('../utils/keyboard.util');
 const ValidationUtil = require('../utils/validation.util');
 const callbackHandler = require('./callback.handler');
-const config = require('../config');
+const config = require('../config/config');
 
 class MessageHandler {
     async handleMessage(msg) {
