@@ -8,7 +8,9 @@ const config = require('../../src/config/config');
 // Мокаем все зависимости
 jest.mock('../../src/services/telegram.service', () => require('../../tests/mocks/telegram.service.mock'));
 jest.mock('../../src/services/database.service');
-jest.mock('../../src/services/notification.service');
+jest.mock('../../src/services/notification.service', () => ({
+    sendReminder: jest.fn()
+}));
 jest.mock('../../src/utils/keyboard.util');
 jest.mock('../../src/config/config');
 
@@ -147,12 +149,12 @@ describe('CommandHandler', () => {
     describe('handleDebug', () => {
         it('should send test notification for admin', async () => {
             const mockUser = { chatId: mockChatId };
-            config.adminIds = [mockChatId];
-            dbService.getUser = jest.fn().mockResolvedValue(mockUser);
-
+            config.adminId = mockChatId;
+            dbService.getUser.mockResolvedValue(mockUser);
+            
             await CommandHandler.handleDebug(mockMessage);
-
-            expect(notificationService.sendReminder).toHaveBeenCalledWith(mockUser);
+            
+            expect(notificationService.sendReminder).toHaveBeenCalledWith(mockUser, true);
             expect(telegramService.sendMessage).toHaveBeenCalledWith(
                 mockChatId,
                 expect.stringContaining('✅ Тестовое уведомление отправлено')
@@ -160,10 +162,10 @@ describe('CommandHandler', () => {
         });
 
         it('should handle unauthorized access', async () => {
-            config.adminIds = [999999]; // другой ID
-
+            config.adminId = 999999; // Different from mockChatId
+            
             await CommandHandler.handleDebug(mockMessage);
-
+            
             expect(telegramService.sendMessage).toHaveBeenCalledWith(
                 mockChatId,
                 expect.stringContaining('⛔️ У вас нет прав')

@@ -50,6 +50,10 @@ const KEYBOARD = {
             id: 'goal',
             text: '🎯 Изменить цель',
         },
+        notifications: {
+            id: 'notifications',
+            text: '🔔 Уведомления',
+        },
         stats: {
             id: 'stats',
             text: '📊 Статистика',

@@ -4,6 +4,7 @@ const notificationService = require('../services/notification.service');
 const KeyboardUtil = require('../utils/keyboard.util');
 const ValidationUtil = require('../utils/validation.util');
 const config = require('../config/config');
+const logger = require('../config/logger.config');
 
 class CommandHandler {
     async handleStart(msg) {
@@ -127,28 +128,31 @@ class CommandHandler {
     }
 
     async handleDebug(msg) {
-        const chatId = msg.chat.id;
-        // Проверяем, является ли пользователь администратором
-        if (config.adminIds && config.adminIds.includes(chatId)) {
-            try {
-                const user = await dbService.getUser(chatId);
-                if (!user) {
-                    await telegramService.sendMessage(chatId, '❌ Пользователь не найден');
-                    return;
-                }
-                await notificationService.sendReminder(user);
-                await telegramService.sendMessage(chatId, '✅ Тестовое уведомление отправлено');
-            } catch (error) {
-                console.error('Error sending debug notification:', error);
+        try {
+            const chatId = msg.chat.id;
+
+            if (chatId !== config.adminId) {
                 await telegramService.sendMessage(
                     chatId,
-                    '❌ Ошибка при отправке тестового уведомления'
+                    '⛔️ У вас нет прав для выполнения этой команды'
                 );
+                return;
             }
-        } else {
+
+            const user = await dbService.getUser(chatId);
+
+            if (!user) {
+                await telegramService.sendMessage(chatId, 'Пользователь не найден в базе данных');
+                return;
+            }
+
+            await notificationService.sendReminder(user, true);
+            await telegramService.sendMessage(chatId, '✅ Тестовое уведомление отправлено');
+        } catch (error) {
+            logger.error('Error in debug command:', error);
             await telegramService.sendMessage(
-                chatId,
-                '⛔️ У вас нет прав для использования этой команды'
+                msg.chat.id,
+                'Произошла ошибка при отправке тестового уведомления'
             );
         }
     }

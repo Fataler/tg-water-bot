@@ -30,7 +30,7 @@ class KeyboardUtil {
         };
     }
 
-    static getSettingsKeyboard() {
+    static getSettingsKeyboard(user) {
         return {
             reply_markup: {
                 inline_keyboard: [
@@ -38,6 +38,14 @@ class KeyboardUtil {
                         {
                             text: KEYBOARD.settings.goal.text,
                             callback_data: `settings_${KEYBOARD.settings.goal.id}`,
+                        },
+                    ],
+                    [
+                        {
+                            text: user?.notification_enabled
+                                ? '🔕 Отключить уведомления'
+                                : '🔔 Включить уведомления',
+                            callback_data: `settings_${KEYBOARD.settings.notifications.id}`,
                         },
                     ],
                     [

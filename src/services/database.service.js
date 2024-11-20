@@ -5,6 +5,12 @@ const config = require('../config/config');
 const logger = require('../config/logger.config');
 const runMigrations = require('../database/migrate');
 
+async function ensureDirectoryExists(dirPath) {
+    if (!fs.existsSync(dirPath)) {
+        fs.mkdirSync(dirPath, { recursive: true });
+    }
+}
+
 class DatabaseService {
     constructor() {
         this.db = null;
@@ -27,18 +33,11 @@ class DatabaseService {
 
     async init() {
         try {
-            logger.info('Initializing database connection...');
             const dbPath = this.getDbPath();
-            const dbDir = path.dirname(dbPath);
-
-            if (!fs.existsSync(dbDir)) {
-                fs.mkdirSync(dbDir, { recursive: true });
-                logger.info(`Created database directory: ${dbDir}`);
-            }
+            await ensureDirectoryExists(path.dirname(dbPath));
 
             this.db = new Database(dbPath);
             await runMigrations(this.db);
-            logger.info('Database initialized successfully');
         } catch (error) {
             logger.error('Failed to initialize database:', error);
             throw error;
@@ -65,9 +64,9 @@ class DatabaseService {
         }
     }
 
-    async getUser(userId) {
+    async getUser(chatId) {
         try {
-            return this.db.prepare('SELECT * FROM users WHERE chat_id = ?').get(userId);
+            return this.db.prepare('SELECT * FROM users WHERE chat_id = ?').get(chatId);
         } catch (error) {
             logger.error('Error getting user:', error);
             throw error;
@@ -107,7 +106,8 @@ class DatabaseService {
                     ROUND(COALESCE(SUM(amount), 0), 2) as total
                 FROM water_intake
                 WHERE user_id = ?
-                AND date(timestamp) = date('now', 'localtime')
+                AND datetime(timestamp, 'localtime') >= datetime('now', 'localtime', 'start of day')
+                AND datetime(timestamp, 'localtime') < datetime('now', 'localtime', 'start of day', '+1 day')
             `
                 )
                 .get(user.id);
@@ -136,14 +136,9 @@ class DatabaseService {
                 params.push(settings.daily_goal);
             }
 
-            if (settings.hasOwnProperty('notification_time')) {
-                updates.push('notification_time = ?');
-                params.push(settings.notification_time);
-            }
-
             if (settings.hasOwnProperty('notification_enabled')) {
                 updates.push('notification_enabled = ?');
-                params.push(settings.notification_enabled);
+                params.push(settings.notification_enabled ? 1 : 0);
             }
 
             if (updates.length === 0) return user;
@@ -155,6 +150,42 @@ class DatabaseService {
             return this.getUser(userId);
         } catch (error) {
             logger.error('Error updating settings:', error);
+            throw error;
+        }
+    }
+
+    async updateUser(userId, updates) {
+        try {
+            const user = await this.getUser(userId);
+            if (!user) throw new Error('User not found');
+
+            const updateFields = [];
+            const params = [];
+
+            if (updates.hasOwnProperty('daily_goal')) {
+                updateFields.push('daily_goal = ?');
+                params.push(updates.daily_goal);
+            }
+
+            if (updates.hasOwnProperty('notification_enabled')) {
+                updateFields.push('notification_enabled = ?');
+                params.push(updates.notification_enabled ? 1 : 0);
+            }
+
+            if (updates.hasOwnProperty('last_notification')) {
+                updateFields.push('last_notification = ?');
+                params.push(updates.last_notification.toISOString());
+            }
+
+            if (updateFields.length === 0) return user;
+
+            params.push(userId);
+            const query = `UPDATE users SET ${updateFields.join(', ')} WHERE chat_id = ?`;
+            this.db.prepare(query).run(...params);
+
+            return this.getUser(userId);
+        } catch (error) {
+            logger.error('Error updating user:', error);
             throw error;
         }
     }
@@ -204,9 +235,9 @@ class DatabaseService {
                 maxDay:
                     dailyIntakes.length > 0
                         ? {
-                            date: maxDay.date,
-                            amount: maxDay.total,
-                        }
+                              date: maxDay.date,
+                              amount: maxDay.total,
+                          }
                         : null,
             };
         } catch (error) {
@@ -221,11 +252,10 @@ class DatabaseService {
                 .prepare(
                     `
                 SELECT * FROM users 
-                WHERE notification_time = ? 
-                AND notification_enabled = 1
+                WHERE notification_enabled = 1
             `
                 )
-                .all(time);
+                .all();
         } catch (error) {
             logger.error('Error getting users for notification:', error);
             throw error;

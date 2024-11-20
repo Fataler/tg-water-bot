@@ -42,7 +42,8 @@ class ValidationUtil {
         return Math.min(Math.round((current / goal) * 100), 100);
     }
 
-    static createProgressBar(percentage) {
+    static createProgressBar(current, goal) {
+        const percentage = this.formatPercentage(current, goal);
         const filledBlocks = Math.floor(percentage / 10);
         const emptyBlocks = 10 - filledBlocks;
         return '🌊'.repeat(filledBlocks) + '⚪️'.repeat(emptyBlocks);

@@ -73,13 +73,13 @@ class CallbackHandler {
             const message =
                 type === KEYBOARD.drinks.water.id
                     ? MESSAGE.prompts.water.amount(
-                        config.validation.water.minAmount,
-                        config.validation.water.maxAmount
-                    )
+                          config.validation.water.minAmount,
+                          config.validation.water.maxAmount
+                      )
                     : MESSAGE.prompts.other.amount(
-                        config.validation.water.minAmount,
-                        config.validation.water.maxAmount
-                    );
+                          config.validation.water.minAmount,
+                          config.validation.water.maxAmount
+                      );
             await telegramService.sendMessage(chatId, message);
             this.userTemp.set(chatId, { waitingFor: `custom_${type}` });
             return;
@@ -155,19 +155,41 @@ class CallbackHandler {
         const [_, setting] = data.split('_');
 
         switch (setting) {
-        case KEYBOARD.settings.goal.id:
-            await telegramService.sendMessage(
-                chatId,
-                MESSAGE.prompts.goal.custom,
-                KeyboardUtil.getGoalKeyboard()
-            );
-            break;
-        default:
-            await telegramService.sendMessage(
-                chatId,
-                MESSAGE.prompts.default,
-                KeyboardUtil.getMainKeyboard()
-            );
+            case KEYBOARD.settings.goal.id:
+                await telegramService.sendMessage(
+                    chatId,
+                    MESSAGE.prompts.goal.custom,
+                    KeyboardUtil.getGoalKeyboard()
+                );
+                break;
+            case KEYBOARD.settings.notifications.id:
+                const user = await dbService.getUser(chatId);
+                const newNotificationState = !user.notification_enabled;
+
+                await dbService.updateUser(chatId, { notification_enabled: newNotificationState });
+
+                if (newNotificationState) {
+                    notificationService.updateUserReminder(chatId);
+                    await telegramService.sendMessage(
+                        chatId,
+                        MESSAGE.notifications.enabled,
+                        KeyboardUtil.getMainKeyboard()
+                    );
+                } else {
+                    notificationService.cancelUserReminders(chatId);
+                    await telegramService.sendMessage(
+                        chatId,
+                        MESSAGE.notifications.disabled,
+                        KeyboardUtil.getMainKeyboard()
+                    );
+                }
+                break;
+            default:
+                await telegramService.sendMessage(
+                    chatId,
+                    MESSAGE.prompts.default,
+                    KeyboardUtil.getMainKeyboard()
+                );
         }
     }
 
@@ -261,22 +283,22 @@ class CallbackHandler {
             let title;
 
             switch (period) {
-            case KEYBOARD.periods.today.id:
-                stats = await dbService.getDailyWaterIntake(chatId);
-                title = MESSAGE.stats.today;
-                break;
-            case KEYBOARD.periods.week.id:
-                stats = await dbService.getWaterIntakeHistory(chatId, 7);
-                title = MESSAGE.stats.week;
-                break;
-            case KEYBOARD.periods.month.id:
-                stats = await dbService.getWaterIntakeHistory(chatId, 30);
-                title = MESSAGE.stats.month;
-                break;
-            case KEYBOARD.periods.all.id:
-                stats = await dbService.getWaterStats(chatId);
-                title = MESSAGE.stats.all;
-                break;
+                case KEYBOARD.periods.today.id:
+                    stats = await dbService.getDailyWaterIntake(chatId);
+                    title = MESSAGE.stats.today;
+                    break;
+                case KEYBOARD.periods.week.id:
+                    stats = await dbService.getWaterIntakeHistory(chatId, 7);
+                    title = MESSAGE.stats.week;
+                    break;
+                case KEYBOARD.periods.month.id:
+                    stats = await dbService.getWaterIntakeHistory(chatId, 30);
+                    title = MESSAGE.stats.month;
+                    break;
+                case KEYBOARD.periods.all.id:
+                    stats = await dbService.getWaterStats(chatId);
+                    title = MESSAGE.stats.all;
+                    break;
             }
 
             const message = MESSAGE.stats.message(title, stats, period, user.daily_goal);

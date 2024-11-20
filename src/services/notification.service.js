@@ -3,18 +3,16 @@ const config = require('../config/config');
 const telegramService = require('./telegram.service');
 const dbService = require('./database.service');
 const ValidationUtil = require('../utils/validation.util');
-const ReminderUtil = require('../utils/reminder.util');
+const logger = require('../config/logger.config');
 
 class NotificationService {
     constructor() {
         this.jobs = new Map();
-        this.lastNotifications = new Map(); // время последнего уведомления для каждого пользователя
-        this.dailyNotificationCount = new Map(); // количество уведомлений за день
-        this.lastDrinkTime = new Map(); // время последнего добавления напитка
     }
 
     async scheduleReminders() {
         try {
+            logger.info('Scheduling reminders for all users');
             this.jobs.forEach((job) => job.cancel());
             this.jobs.clear();
 
@@ -24,13 +22,9 @@ class NotificationService {
                     this.scheduleUserReminder(user);
                 }
             });
-
-            // Сброс счетчиков уведомлений в полночь
-            schedule.scheduleJob('0 0 * * *', () => {
-                this.dailyNotificationCount.clear();
-            });
         } catch (error) {
-            console.error('Error scheduling reminders:', error);
+            logger.error('Error scheduling reminders:', error);
+            throw error;
         }
     }
 
@@ -44,41 +38,48 @@ class NotificationService {
         return null;
     }
 
-    shouldSendNotification(user, dailyIntake) {
-        const now = Date.now();
+    async shouldSendNotification(user, dailyIntake) {
+        const now = new Date();
         const period = this.getCurrentPeriod();
-        if (!period) return false; // не отправляем уведомления ночью
 
-        // Проверяем ограничения
-        const lastNotification = this.lastNotifications.get(user.user_id) || 0;
-        const lastDrink = this.lastDrinkTime.get(user.user_id) || 0;
-        const notificationCount = this.dailyNotificationCount.get(user.user_id) || 0;
+        // Не отправляем уведомления ночью
+        if (!period) {
+            return false;
+        }
 
-        if (now - lastNotification < config.notifications.limits.minInterval) return false;
-        if (now - lastDrink < config.notifications.limits.backoffTime) return false;
-        if (notificationCount >= config.notifications.limits.maxDaily) return false;
+        // Проверяем, достигнута ли дневная цель
+        if (dailyIntake.total >= user.daily_goal) {
+            return false;
+        }
+
+        // Проверяем минимальный интервал между уведомлениями
+        if (user.last_notification) {
+            const lastNotification = new Date(user.last_notification);
+            const timeSinceLastNotification = now - lastNotification;
+
+            if (timeSinceLastNotification < config.notifications.limits.minInterval) {
+                return false;
+            }
+        }
 
         // Проверяем прогресс в текущем периоде
-        const { targetPercent } = config.notifications.periods[period];
         const currentProgress = (dailyIntake.total / user.daily_goal) * 100;
         const expectedProgress = this.getExpectedProgress(period);
 
-        // Отправляем уведомление, если отстаем от графика
-        return currentProgress < expectedProgress;
+        const shouldSend = currentProgress < expectedProgress;
+        return shouldSend;
     }
 
     getExpectedProgress(period) {
         const { periods } = config.notifications;
         let expected = 0;
 
-        // Суммируем целевые проценты для всех предыдущих периодов и текущего
         if (period === 'evening') {
             expected += periods.morning.targetPercent + periods.day.targetPercent;
         } else if (period === 'day') {
             expected += periods.morning.targetPercent;
         }
 
-        // Добавляем часть текущего периода
         const periodConfig = periods[period];
         const periodLength = periodConfig.end - periodConfig.start;
         const currentHour = new Date().getHours();
@@ -89,55 +90,55 @@ class NotificationService {
         return expected;
     }
 
-    scheduleUserReminder(user) {
-        const [hours, minutes] = user.notification_time.split(':');
-        const rule = new schedule.RecurrenceRule();
-        rule.hour = parseInt(hours);
-        rule.minute = parseInt(minutes);
+    async sendReminder(user, isTest = false) {
+        try {
+            const dailyIntake = await dbService.getDailyIntake(user.chat_id);
+            const remainingWater = user.daily_goal - (dailyIntake?.total || 0);
 
-        const job = schedule.scheduleJob(rule, () => this.sendReminder(user));
-        this.jobs.set(user.user_id, job);
+            if (!isTest && !(await this.shouldSendNotification(user, dailyIntake))) {
+                return;
+            }
+
+            const message = `💧 Не забудьте выпить воды!\n\nОсталось выпить: ${remainingWater}мл`;
+            await telegramService.sendMessage(user.chat_id, message);
+            await dbService.updateUser(user.chat_id, { last_notification: new Date() });
+        } catch (error) {
+            logger.error(`Error sending reminder to user ${user.chat_id}:`, error);
+            throw error;
+        }
     }
 
-    async sendReminder(user) {
-        try {
-            if (!user.notification_enabled) return;
+    scheduleUserReminder(user) {
+        const times = ['12:00', '15:00', '18:00'];
 
-            const today = new Date();
-            const dailyIntake = await dbService.getDailyWaterIntake(user.user_id, today);
+        times.forEach((time) => {
+            const [hours, minutes] = time.split(':').map(Number);
 
-            if (dailyIntake.total >= user.daily_goal) return;
+            const job = schedule.scheduleJob({ hour: hours, minute: minutes }, async () => {
+                try {
+                    const todayStats = await dbService.getTodayStats(user.chat_id);
+                    const currentIntake = Math.round(todayStats.total * 1000); // конвертируем в мл
+                    const goal = user.daily_goal * 1000; // конвертируем в мл
 
-            // Проверяем, нужно ли отправлять уведомление
-            if (!this.shouldSendNotification(user, dailyIntake)) return;
+                    // Отправляем уведомление только если текущее потребление меньше цели
+                    if (currentIntake < goal) {
+                        await telegramService.sendMessage(
+                            user.chat_id,
+                            MESSAGE.notifications.reminder(currentIntake, goal),
+                            KeyboardUtil.getMainKeyboard()
+                        );
 
-            const percentage = ValidationUtil.formatPercentage(dailyIntake.total, user.daily_goal);
-            const progressBar = this.getProgressBar(percentage);
-            const period = this.getCurrentPeriod();
-            const expectedProgress = this.getExpectedProgress(period);
-
-            const reminderMessage = ReminderUtil.getRandomMessage();
-            const message =
-                `${reminderMessage}\n\n` +
-                'Сегодня вы выпили:\n' +
-                `💧 Вода: ${dailyIntake.water}л\n` +
-                `🥤 Другие напитки: ${dailyIntake.other}л\n` +
-                `📊 Всего: ${dailyIntake.total}л из ${user.daily_goal}л\n\n` +
-                `Текущий прогресс: ${percentage}%\n` +
-                `Ожидаемый прогресс: ${expectedProgress.toFixed(1)}%\n` +
-                progressBar;
-
-            await telegramService.sendMessage(user.user_id, message);
-
-            // Обновляем счетчики
-            this.lastNotifications.set(user.user_id, Date.now());
-            this.dailyNotificationCount.set(
-                user.user_id,
-                (this.dailyNotificationCount.get(user.user_id) || 0) + 1
-            );
-        } catch (error) {
-            console.error('Error sending reminder:', error);
-        }
+                        // Обновляем время последнего уведомления
+                        await dbService.updateUser(user.chat_id, {
+                            last_notification_time: new Date(),
+                        });
+                    }
+                } catch (error) {
+                    logger.error(`Error sending notification to user ${user.chat_id}:`, error);
+                }
+            });
+            this.jobs.set(user.chat_id, job);
+        });
     }
 
     getProgressBar(percentage) {
@@ -147,20 +148,39 @@ class NotificationService {
     }
 
     updateUserReminder(chatId) {
-        return dbService
-            .getUser(chatId)
-            .then((user) => {
-                if (user && user.notification_enabled) {
-                    const oldJob = this.jobs.get(chatId);
-                    if (oldJob) {
-                        oldJob.cancel();
+        const user = this.jobs.get(chatId);
+        if (user) {
+            user.cancel();
+        }
+
+        const times = ['12:00', '15:00', '18:00'];
+
+        times.forEach((time) => {
+            const [hours, minutes] = time.split(':').map(Number);
+
+            const job = schedule.scheduleJob({ hour: hours, minute: minutes }, async () => {
+                try {
+                    const todayStats = await dbService.getTodayStats(chatId);
+                    const currentIntake = Math.round(todayStats.total * 1000); // конвертируем в мл
+                    const goal = (await dbService.getUser(chatId)).daily_goal * 1000; // конвертируем в мл
+
+                    // Отправляем уведомление только если текущее потребление меньше цели
+                    if (currentIntake < goal) {
+                        await telegramService.sendMessage(
+                            chatId,
+                            MESSAGE.notifications.reminder(currentIntake, goal),
+                            KeyboardUtil.getMainKeyboard()
+                        );
+
+                        // Обновляем время последнего уведомления
+                        await dbService.updateUser(chatId, { last_notification_time: new Date() });
                     }
-                    this.scheduleUserReminder(user);
+                } catch (error) {
+                    logger.error(`Error sending notification to user ${chatId}:`, error);
                 }
-            })
-            .catch((error) => {
-                console.error('Error updating user reminder:', error);
             });
+            this.jobs.set(chatId, job);
+        });
     }
 
     cancelUserReminders(chatId) {
@@ -169,11 +189,6 @@ class NotificationService {
             job.cancel();
             this.jobs.delete(chatId);
         }
-    }
-
-    // Метод для обновления времени последнего питья
-    updateLastDrinkTime(userId) {
-        this.lastDrinkTime.set(userId, Date.now());
     }
 }
 
