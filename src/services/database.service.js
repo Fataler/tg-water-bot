@@ -97,12 +97,44 @@ class DatabaseService {
         }
     }
 
+    async aggregateWaterIntake(rows) {
+        if (rows.length === 0) {
+            return {
+                water: 0,
+                other: 0,
+                total: 0,
+            };
+        }
+
+        const water = rows.reduce((sum, day) => sum + day.water, 0);
+        const other = rows.reduce((sum, day) => sum + day.other, 0);
+        const total = rows.reduce((sum, day) => sum + day.total, 0);
+
+        return {
+            water: Number(water.toFixed(2)),
+            other: Number(other.toFixed(2)),
+            total: Number(total.toFixed(2)),
+        };
+    }
+
     async getDailyWaterIntake(userId) {
-        return this.getWaterIntakeHistory(userId, 1);
+        try {
+            const rows = await this.getWaterIntakeHistory(userId, 1);
+            return rows.length > 0 ? rows[0] : this.aggregateWaterIntake([]);
+        } catch (error) {
+            logger.error('Error getting daily water intake:', error);
+            throw error;
+        }
     }
 
     async getWeeklyWaterIntake(userId) {
-        return this.getWaterIntakeHistory(userId, 7);
+        try {
+            const rows = await this.getWaterIntakeHistory(userId, 7);
+            return this.aggregateWaterIntake(rows);
+        } catch (error) {
+            logger.error('Error getting weekly water intake:', error);
+            throw error;
+        }
     }
 
     async getMonthlyWaterIntake(chatId) {
@@ -112,32 +144,21 @@ class DatabaseService {
             const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
 
             const dailyIntakes = await this.getWaterIntakeHistory(chatId, startOfMonth, endOfMonth);
-
-            if (dailyIntakes.length === 0) {
-                return {
-                    water: 0,
-                    other: 0,
-                    total: 0,
-                };
-            }
-
-            const total = dailyIntakes.reduce((sum, day) => sum + day.total, 0);
-            const water = dailyIntakes.reduce((sum, day) => sum + day.water, 0);
-            const other = dailyIntakes.reduce((sum, day) => sum + day.other, 0);
-
-            return {
-                water: Number(water.toFixed(2)),
-                other: Number(other.toFixed(2)),
-                total: Number(total.toFixed(2)),
-            };
+            return this.aggregateWaterIntake(dailyIntakes);
         } catch (error) {
-            logger.error('Error getting water intake history:', error);
+            logger.error('Error getting monthly water intake:', error);
             throw error;
         }
     }
 
     async getAllTimeWaterIntake(userId) {
-        return this.getWaterIntakeHistory(userId, 365);
+        try {
+            const rows = await this.getWaterIntakeHistory(userId, 365);
+            return this.aggregateWaterIntake(rows);
+        } catch (error) {
+            logger.error('Error getting all-time water intake:', error);
+            throw error;
+        }
     }
 
     async getWaterIntakeHistory(userId, days) {

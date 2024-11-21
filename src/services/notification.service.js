@@ -3,7 +3,7 @@ const config = require('../config/config');
 const telegramService = require('./telegram.service');
 const dbService = require('./database.service');
 const KeyboardUtil = require('../utils/keyboard.util');
-const { MESSAGE } = require('../config/message.config');
+const MESSAGE = require('../config/message.config');
 const logger = require('../config/logger.config');
 
 class NotificationService {
@@ -120,8 +120,8 @@ class NotificationService {
             }
 
             const message = MESSAGE.notifications.reminder.format(
-                dailyIntake.total * 1000,
-                user.daily_goal * 1000
+                dailyIntake.total,
+                user.daily_goal
             );
             logger.info('Sending reminder message:', message);
 
