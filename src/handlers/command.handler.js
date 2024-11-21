@@ -50,11 +50,7 @@ class CommandHandler {
                 ],
             },
         };
-        await telegramService.sendMessage(
-            chatId,
-            MESSAGE.prompts.reset.confirm,
-            confirmKeyboard
-        );
+        await telegramService.sendMessage(chatId, MESSAGE.prompts.reset.confirm, confirmKeyboard);
     }
 
     async handleAddWater(msg) {
@@ -107,7 +103,9 @@ class CommandHandler {
 
     async handleHelp(msg) {
         const chatId = msg.chat.id;
-        await telegramService.sendMessage(chatId, MESSAGE.commands.help, { parse_mode: 'Markdown' });
+        await telegramService.sendMessage(chatId, MESSAGE.commands.help, {
+            parse_mode: 'Markdown',
+        });
     }
 
     async handleDebug(msg) {
@@ -131,7 +129,7 @@ class CommandHandler {
             await telegramService.sendMessage(chatId, MESSAGE.commands.debug.testNotificationSent);
         } catch (error) {
             logger.error('Error in debug command:', error);
-            await telegramService.sendMessage(chatId, MESSAGE.errors.general);
+            await telegramService.sendMessage(msg.chat.id, MESSAGE.errors.general);
         }
     }
 

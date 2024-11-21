@@ -1,14 +1,14 @@
 const KEYBOARD = {
     main: {
         addWater: {
-            text: '💧 Добавить воду'
+            text: '💧 Добавить воду',
         },
         stats: {
-            text: '📊 Статистика'
+            text: '📊 Статистика',
         },
         settings: {
-            text: '⚙️ Настройки'
-        }
+            text: '⚙️ Настройки',
+        },
     },
     periods: {
         today: {
@@ -77,28 +77,28 @@ const KEYBOARD = {
     goals: {
         1.5: {
             text: '1.5',
-            value: 1.5
+            value: 1.5,
         },
         2: {
             text: '2',
-            value: 2
+            value: 2,
         },
         2.5: {
             text: '2.5',
-            value: 2.5
+            value: 2.5,
         },
         3: {
             text: '3',
-            value: 3
+            value: 3,
         },
         3.5: {
             text: '3.5',
-            value: 3.5
+            value: 3.5,
         },
         4: {
             text: '4',
-            value: 4
-        }
+            value: 4,
+        },
     },
     reset: {
         confirm: {

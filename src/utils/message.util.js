@@ -1,6 +1,6 @@
 const logger = require('../config/logger.config');
 const ValidationUtil = require('./validation.util');
-const { config } = require('../config/config');
+const config = require('../config/config');
 
 class MessageUtil {
     static formatWaterAddedMessage(amount, dailyIntake) {
