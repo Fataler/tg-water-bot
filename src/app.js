@@ -1,13 +1,9 @@
-const telegramService = require('./services/telegram.service');
 const dbService = require('./services/database.service');
 const notificationService = require('./services/notification.service');
 const commandHandler = require('./handlers/command.handler');
 const callbackHandler = require('./handlers/callback.handler');
 const messageHandler = require('./handlers/message.handler');
 const logger = require('./config/logger.config');
-const config = require('./config/config');
-const fs = require('fs');
-const path = require('path');
 
 class App {
     async start() {

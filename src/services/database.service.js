@@ -105,41 +105,19 @@ class DatabaseService {
         return this.getWaterIntakeHistory(userId, 7);
     }
 
-    async getMonthlyWaterIntake(userId) {
-        return this.getWaterIntakeHistory(userId, 30);
-    }
-
-    async getAllTimeWaterIntake(userId) {
-        return this.getWaterIntakeHistory(userId, 365);
-    }
-
-    async getWaterIntakeHistory(userId, limit = 5) {
+    async getMonthlyWaterIntake(chatId) {
         try {
-            const user = await this.getUser(userId);
-            if (!user) throw new Error('User not found');
+            const now = new Date();
+            const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+            const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
 
-            const dailyIntakes = this.db
-                .prepare(
-                    `
-                SELECT 
-                    date(timestamp, 'localtime') as date,
-                    ROUND(COALESCE(SUM(CASE WHEN drink_type = 'water' THEN amount ELSE 0 END), 0), 2) as water,
-                    ROUND(COALESCE(SUM(CASE WHEN drink_type != 'water' THEN amount ELSE 0 END), 0), 2) as other,
-                    ROUND(COALESCE(SUM(amount), 0), 2) as total
-                FROM water_intake
-                WHERE user_id = ?
-                AND date(timestamp, 'localtime') >= date('now', '-' || ? || ' days', 'localtime')
-                GROUP BY date(timestamp, 'localtime')
-                ORDER BY date DESC
-                `
-                )
-                .all(user.id, limit);
+            const dailyIntakes = await this.getWaterIntakeHistory(chatId, startOfMonth, endOfMonth);
 
             if (dailyIntakes.length === 0) {
                 return {
                     water: 0,
                     other: 0,
-                    total: 0
+                    total: 0,
                 };
             }
 
@@ -150,7 +128,7 @@ class DatabaseService {
             return {
                 water: Number(water.toFixed(2)),
                 other: Number(other.toFixed(2)),
-                total: Number(total.toFixed(2))
+                total: Number(total.toFixed(2)),
             };
         } catch (error) {
             logger.error('Error getting water intake history:', error);
@@ -158,7 +136,38 @@ class DatabaseService {
         }
     }
 
-    async getUsersForNotification(time) {
+    async getAllTimeWaterIntake(userId) {
+        return this.getWaterIntakeHistory(userId, 365);
+    }
+
+    async getWaterIntakeHistory(userId, days) {
+        try {
+            const now = new Date();
+            const startDate = new Date(now);
+            startDate.setDate(startDate.getDate() - days);
+
+            const query = `
+                SELECT 
+                    strftime('%Y-%m-%d', datetime(timestamp, 'unixepoch')) as date,
+                    SUM(CASE WHEN drink_type = 'water' THEN amount ELSE 0 END) as water,
+                    SUM(CASE WHEN drink_type = 'other' THEN amount ELSE 0 END) as other,
+                    SUM(amount) as total
+                FROM water_intake
+                WHERE user_id = ? AND timestamp >= ?
+                GROUP BY date
+                ORDER BY date DESC
+            `;
+
+            const rows = this.db.prepare(query).all(userId, Math.floor(startDate.getTime() / 1000));
+
+            return rows;
+        } catch (error) {
+            logger.error('Error getting water intake history:', error);
+            throw error;
+        }
+    }
+
+    async getUsersForNotification() {
         try {
             return this.db
                 .prepare(

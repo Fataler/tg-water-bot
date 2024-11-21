@@ -1,4 +1,3 @@
-const telegramService = require('../services/telegram.service');
 const KEYBOARD = require('../config/keyboard.config');
 
 class KeyboardUtil {

@@ -2,10 +2,9 @@ const schedule = require('node-schedule');
 const config = require('../config/config');
 const telegramService = require('./telegram.service');
 const dbService = require('./database.service');
-const ValidationUtil = require('../utils/validation.util');
+const KeyboardUtil = require('../utils/keyboard.util');
+const { MESSAGE } = require('../config/message.config');
 const logger = require('../config/logger.config');
-const MESSAGE = require('../config/message.config');
-const { KeyboardUtil } = require('../utils/keyboard.util');
 
 class NotificationService {
     constructor() {
@@ -120,11 +119,16 @@ class NotificationService {
                 return;
             }
 
-            const message = MESSAGE.notifications.reminder.format(dailyIntake.total * 1000, user.daily_goal * 1000);
+            const message = MESSAGE.notifications.reminder.format(
+                dailyIntake.total * 1000,
+                user.daily_goal * 1000
+            );
             logger.info('Sending reminder message:', message);
-            
+
             await telegramService.sendMessage(user.chat_id, message);
-            await dbService.updateUser(user.chat_id, { last_notification: Math.floor(Date.now() / 1000) });
+            await dbService.updateUser(user.chat_id, {
+                last_notification: Math.floor(Date.now() / 1000),
+            });
         } catch (error) {
             logger.error(`Error sending reminder to user ${user.chat_id}:`, error);
             throw error;
@@ -160,7 +164,7 @@ class NotificationService {
 
                         // Обновляем время последнего уведомления
                         await dbService.updateUser(user.chat_id, {
-                            last_notification: Math.floor(Date.now() / 1000)
+                            last_notification: Math.floor(Date.now() / 1000),
                         });
                     }
                 } catch (error) {
@@ -183,7 +187,9 @@ class NotificationService {
             const notificationsEnabled = !user.notification_enabled;
             await dbService.updateUser(chatId, { notification_enabled: notificationsEnabled });
 
-            const message = notificationsEnabled ? MESSAGE.notifications.enabled : MESSAGE.notifications.disabled;
+            const message = notificationsEnabled
+                ? MESSAGE.notifications.enabled
+                : MESSAGE.notifications.disabled;
             const keyboard = KeyboardUtil.getMainKeyboard(notificationsEnabled);
 
             await telegramService.editMessage(chatId, messageId, message, keyboard);

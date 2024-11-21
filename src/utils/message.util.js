@@ -1,25 +1,22 @@
-const telegramService = require('../services/telegram.service');
-const KeyboardUtil = require('./keyboard.util');
+const logger = require('../config/logger.config');
 const ValidationUtil = require('./validation.util');
-const MESSAGE = require('../config/message.config');
-const config = require('../config/config');
-const KEYBOARD = require('../config/keyboard.config');
+const { config } = require('../config/config');
 
 class MessageUtil {
-    static formatWaterAddedMessage(amount, dailyIntake, goal) {
+    static formatWaterAddedMessage(amount, dailyIntake) {
         return (
             `🎯 Отлично! Добавлено ${ValidationUtil.formatWaterAmount(amount)}!\n\n` +
             `💧 Вода: ${ValidationUtil.formatWaterAmount(dailyIntake.water)}\n` +
             `🥤 Другие напитки: ${ValidationUtil.formatWaterAmount(dailyIntake.other)}\n` +
-            `📊 Всего: ${ValidationUtil.formatWaterAmount(dailyIntake.total)} из ${ValidationUtil.formatWaterAmount(goal)}\n\n` +
-            `${dailyIntake.total >= goal ? '🎉 Ты достиг(ла) дневной цели! Так держать! 💪' : '💪 Продолжай в том же духе!'}`
+            `📊 Всего: ${ValidationUtil.formatWaterAmount(dailyIntake.total)}\n\n` +
+            `${dailyIntake.total >= dailyIntake.goal ? '🎉 Ты достиг(ла) дневной цели! Так держать! 💪' : '💪 Продолжай в том же духе!'}`
         );
     }
 
-    static formatDailyStats(amount, goal, options = { showEmoji: true }) {
-        const percent = Math.round((amount / goal) * 100);
+    static formatDailyStats(amount, options = { showEmoji: true }) {
+        const percent = Math.round((amount / 2.5) * 100);
         const emoji = options.showEmoji ? '💧 ' : '';
-        return `${emoji}Сегодня: ${amount}л из ${goal}л (${percent}%)`;
+        return `${emoji}Сегодня: ${amount}л из 2.5л (${percent}%)`;
     }
 
     static formatAllTimeStats(stats) {
@@ -62,7 +59,7 @@ class MessageUtil {
         return '🟦'.repeat(filledCount) + '⬜️'.repeat(emptyCount);
     }
 
-    static formatGoalSetMessage(goal) {
+    static formatGoalSetMessage() {
         const { morning, day, evening } = config.notifications.periods;
 
         return (
@@ -75,20 +72,23 @@ class MessageUtil {
         );
     }
 
-    static formatStatsMessage(title, stats, period, goal) {
-        let message = `📊 ${title}:\n\n`;
-
-        if (period === KEYBOARD.periods.today.id) {
-            message += this.formatDailyStats(stats, goal);
-        } else {
-            message += `Всего выпито: ${stats.total}л\n`;
-            message += `В среднем: ${stats.average}л в день\n`;
-            if (stats.maxDay) {
-                message += `\nЛучший день: ${stats.maxDay.date} (${stats.maxDay.amount}л)\n`;
+    static formatStats(messageType, stats, period) {
+        try {
+            if (!stats || !messageType) {
+                return null;
             }
-        }
 
-        return message;
+            const { water, other, total } = stats;
+
+            return messageType
+                .replace('{water}', water * 1000)
+                .replace('{other}', other * 1000)
+                .replace('{total}', total * 1000)
+                .replace('{period}', period || '');
+        } catch (error) {
+            logger.error('Error formatting stats message:', error);
+            return null;
+        }
     }
 }
 

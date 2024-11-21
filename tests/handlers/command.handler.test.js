@@ -154,7 +154,12 @@ describe('CommandHandler', () => {
             config.adminIds = [mockChatId];
             dbService.getUser.mockResolvedValue(mockUser);
             
-            await CommandHandler.handleDebug(mockMessage);
+            const mockMessageWithUser = { 
+                chat: { id: mockChatId },
+                from: { id: mockChatId }
+            };
+
+            await CommandHandler.handleDebug(mockMessageWithUser);
             
             expect(notificationService.sendReminder).toHaveBeenCalledWith(mockUser, true);
             expect(telegramService.sendMessage).toHaveBeenCalledWith(
@@ -166,7 +171,12 @@ describe('CommandHandler', () => {
         it('should handle unauthorized access', async () => {
             config.adminIds = [999999]; // Different from mockChatId
             
-            await CommandHandler.handleDebug(mockMessage);
+            const mockMessageWithUser = { 
+                chat: { id: mockChatId },
+                from: { id: mockChatId }
+            };
+
+            await CommandHandler.handleDebug(mockMessageWithUser);
             
             expect(telegramService.sendMessage).toHaveBeenCalledWith(
                 mockChatId,

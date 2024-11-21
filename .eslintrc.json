@@ -5,7 +5,8 @@
     "jest": true
   },
   "extends": [
-    "eslint:recommended"
+    "eslint:recommended",
+    "prettier"
   ],
   "parserOptions": {
     "ecmaVersion": 2022,
@@ -31,5 +32,13 @@
     "space-infix-ops": "error",
     "object-curly-spacing": ["error", "always"],
     "no-prototype-builtins": "off"
+  },
+  "plugins": ["prettier"],
+  "settings": {
+    "prettier/prettier": {
+      "tabWidth": 4,
+      "singleQuote": true,
+      "trailingComma": "es5"
+    }
   }
 }

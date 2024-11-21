@@ -2,7 +2,6 @@ const telegramService = require('../services/telegram.service');
 const dbService = require('../services/database.service');
 const notificationService = require('../services/notification.service');
 const KeyboardUtil = require('../utils/keyboard.util');
-const ValidationUtil = require('../utils/validation.util');
 const config = require('../config/config');
 const logger = require('../config/logger.config');
 
@@ -31,7 +30,7 @@ class CommandHandler {
                     error.response?.body?.error_code === 400
                 ) {
                     await dbService.deleteUser(chatId);
-                    console.log(
+                    logger.info(
                         `Пользователь ${chatId} удален из базы данных (бот заблокирован или удален)`
                     );
                 }
@@ -96,7 +95,7 @@ class CommandHandler {
                     KeyboardUtil.getSettingsKeyboard(user, message.message_id)
                 );
             } catch (error) {
-                console.error('Error handling settings:', error);
+                logger.error('Error handling settings:', error);
                 await telegramService.sendMessage(
                     chatId,
                     '❌ Произошла ошибка. Попробуйте еще раз.',
@@ -129,9 +128,11 @@ class CommandHandler {
 
     async handleDebug(msg) {
         try {
+            const userId = msg.from.id; // ID пользователя, а не чата
             const chatId = msg.chat.id;
 
-            if (!config.adminIds.includes(chatId)) {
+            if (!config.adminIds.includes(userId)) {
+                // Проверяем ID пользователя
                 await telegramService.sendMessage(
                     chatId,
                     '⛔️ У вас нет прав для выполнения этой команды'
