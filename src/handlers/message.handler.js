@@ -11,12 +11,27 @@ class MessageHandler {
         const chatId = msg.chat.id;
         const text = msg.text;
 
-        // Проверяем, ожидаем ли мы пользовательский ввод
-        const userTemp = callbackHandler.userTemp.get(chatId);
-        if (userTemp) {
-            await this.handleCustomInput(chatId, text, userTemp);
-            callbackHandler.userTemp.delete(chatId);
+        if (text === '/start') {
             return;
+        }
+
+        try {
+            const user = await dbService.getUser(chatId);
+
+            if (!user) {
+                await telegramService.sendMessage(chatId, MESSAGE.errors.userNotFound);
+                return;
+            }
+
+            const userTemp = callbackHandler.userTemp.get(chatId);
+            if (userTemp) {
+                await this.handleCustomInput(chatId, text, userTemp);
+                callbackHandler.userTemp.delete(chatId);
+                return;
+            }
+        } catch (error) {
+            console.error('Error handling message:', error);
+            await telegramService.sendMessage(chatId, MESSAGE.errors.general);
         }
     }
 
@@ -55,11 +70,8 @@ class MessageHandler {
             case 'custom_water':
             case 'custom_other':
                 if (ValidationUtil.isValidAmount(amount)) {
-                    await callbackHandler.handleDrinkIntake(
-                        chatId,
-                        amount,
-                        userTemp.waitingFor === 'custom_water' ? 'water' : 'other'
-                    );
+                    const drinkType = userTemp.waitingFor === 'custom_water' ? 'water' : 'other';
+                    await callbackHandler.handleDrinkIntake(chatId, amount.toString(), drinkType);
                 } else {
                     await telegramService.sendMessage(
                         chatId,

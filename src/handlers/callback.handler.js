@@ -13,9 +13,6 @@ const MESSAGE = require('../config/message.config');
 const config = require('../config/config');
 const logger = require('../config/logger.config');
 
-/**
- * Обработчик callback-запросов от Telegram бота
- */
 class CallbackHandler {
     constructor() {
         this.userTemp = new Map();
@@ -27,7 +24,7 @@ class CallbackHandler {
             stats: this.handleStatsCallback.bind(this),
             settings: this.handleSettingsCallback.bind(this),
             reset: this.handleResetCallback.bind(this),
-            'reset-confirm': this.handleResetConfirmCallback.bind(this),
+            resetConfirm: this.handleResetConfirmCallback.bind(this),
         };
     }
 
@@ -65,7 +62,7 @@ class CallbackHandler {
         await notificationService.scheduleReminders(chatId);
         await telegramService.sendMessage(
             chatId,
-            MESSAGE.success.goalSet(goalValue),
+            MESSAGE.success.goalSet,
             KeyboardUtil.getMainKeyboard()
         );
     }
@@ -124,29 +121,32 @@ class CallbackHandler {
                 await telegramService.deleteMessage(chatId, messageId);
             }
             const user = await databaseService.getUser(chatId);
+            if (!user) {
+                throw new Error('User not found');
+            }
 
             let stats;
             let messageType;
 
             switch (period) {
                 case KEYBOARD.periods.today.id:
-                    stats = await databaseService.getDailyWaterIntake(chatId);
+                    stats = await databaseService.getDailyWaterIntake(user.id);
                     messageType = MESSAGE.stats.today;
                     break;
                 case KEYBOARD.periods.week.id:
-                    stats = await databaseService.getWeeklyWaterIntake(chatId);
+                    stats = await databaseService.getWeeklyWaterIntake(user.id);
                     messageType = MESSAGE.stats.week;
                     break;
                 case KEYBOARD.periods.month.id:
-                    stats = await databaseService.getMonthlyWaterIntake(chatId);
+                    stats = await databaseService.getMonthlyWaterIntake(user.id);
                     messageType = MESSAGE.stats.month;
                     break;
                 case KEYBOARD.periods.all.id:
-                    stats = await databaseService.getAllTimeWaterIntake(chatId);
+                    stats = await databaseService.getAllTimeWaterIntake(user.id);
                     messageType = MESSAGE.stats.all;
                     break;
                 default:
-                    stats = await databaseService.getDailyWaterIntake(chatId);
+                    stats = await databaseService.getDailyWaterIntake(user.id);
                     messageType = MESSAGE.stats.today;
             }
 
@@ -226,7 +226,7 @@ class CallbackHandler {
         if (action === KEYBOARD.reset.confirm.id) {
             await databaseService.deleteUser(chatId);
             await notificationService.cancelReminders(chatId);
-            await telegramService.sendMessage(chatId, MESSAGE.success.reset);
+            await telegramService.sendMessage(chatId, MESSAGE.prompts.reset.success);
         } else {
             await telegramService.sendMessage(
                 chatId,
@@ -262,10 +262,14 @@ class CallbackHandler {
                 return;
             }
 
-            await databaseService.addWaterIntake(chatId, intakeAmount, type);
-            const todayIntake = await databaseService.getDailyWaterIntake(chatId);
             const user = await databaseService.getUser(chatId);
+            if (!user) {
+                throw new Error('User not found');
+            }
 
+            await databaseService.addWaterIntake(user.id, intakeAmount, type);
+            const todayIntake = await databaseService.getDailyWaterIntake(user.id);
+            
             await telegramService.sendMessage(
                 chatId,
                 MESSAGE.success.waterAdded(intakeAmount, todayIntake, user.daily_goal),

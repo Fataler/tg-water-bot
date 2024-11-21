@@ -80,15 +80,9 @@ class DatabaseService {
 
     async addWaterIntake(userId, amount, drinkType = 'water') {
         try {
-            const user = await this.getUser(userId);
-            if (!user) {
-                logger.error('User not found for water intake:', userId);
-                throw new Error('User not found');
-            }
-
             const result = this.db
                 .prepare('INSERT INTO water_intake (user_id, amount, drink_type) VALUES (?, ?, ?)')
-                .run(user.id, amount, drinkType);
+                .run(userId, amount, drinkType);
 
             return result.lastInsertRowid;
         } catch (error) {
@@ -120,7 +114,7 @@ class DatabaseService {
     async getDailyWaterIntake(userId) {
         try {
             const rows = await this.getWaterIntakeHistory(userId, 1);
-            return rows.length > 0 ? rows[0] : this.aggregateWaterIntake([]);
+            return rows[0] || this.aggregateWaterIntake([]);
         } catch (error) {
             logger.error('Error getting daily water intake:', error);
             throw error;
@@ -137,14 +131,12 @@ class DatabaseService {
         }
     }
 
-    async getMonthlyWaterIntake(chatId) {
+    async getMonthlyWaterIntake(userId) {
         try {
             const now = new Date();
-            const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-            const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-
-            const dailyIntakes = await this.getWaterIntakeHistory(chatId, startOfMonth, endOfMonth);
-            return this.aggregateWaterIntake(dailyIntakes);
+            const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+            const rows = await this.getWaterIntakeHistory(userId, daysInMonth);
+            return this.aggregateWaterIntake(rows);
         } catch (error) {
             logger.error('Error getting monthly water intake:', error);
             throw error;
@@ -163,24 +155,28 @@ class DatabaseService {
 
     async getWaterIntakeHistory(userId, days) {
         try {
-            const now = new Date();
-            const startDate = new Date(now);
-            startDate.setDate(startDate.getDate() - days);
-
             const query = `
+                WITH RECURSIVE dates(date) AS (
+                    SELECT date('now', '-' || ? || ' days')
+                    UNION ALL
+                    SELECT date(date, '+1 day')
+                    FROM dates
+                    WHERE date < date('now')
+                )
                 SELECT 
-                    strftime('%Y-%m-%d', datetime(timestamp, 'unixepoch')) as date,
-                    SUM(CASE WHEN drink_type = 'water' THEN amount ELSE 0 END) as water,
-                    SUM(CASE WHEN drink_type = 'other' THEN amount ELSE 0 END) as other,
-                    SUM(amount) as total
-                FROM water_intake
-                WHERE user_id = ? AND timestamp >= ?
-                GROUP BY date
-                ORDER BY date DESC
+                    dates.date,
+                    COALESCE(SUM(CASE WHEN drink_type = 'water' THEN amount ELSE 0 END), 0) as water,
+                    COALESCE(SUM(CASE WHEN drink_type = 'other' THEN amount ELSE 0 END), 0) as other,
+                    COALESCE(SUM(amount), 0) as total
+                FROM dates
+                LEFT JOIN water_intake ON 
+                    date(water_intake.timestamp) = dates.date 
+                    AND water_intake.user_id = ?
+                GROUP BY dates.date
+                ORDER BY dates.date DESC
             `;
 
-            const rows = this.db.prepare(query).all(userId, Math.floor(startDate.getTime() / 1000));
-
+            const rows = this.db.prepare(query).all(days - 1, userId);
             return rows;
         } catch (error) {
             logger.error('Error getting water intake history:', error);

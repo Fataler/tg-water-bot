@@ -40,17 +40,11 @@ class CommandHandler {
 
     async handleReset(msg) {
         const chatId = msg.chat.id;
-        const confirmKeyboard = {
-            reply_markup: {
-                inline_keyboard: [
-                    [
-                        { text: '✅ Да, сбросить', callback_data: 'reset_confirm' },
-                        { text: '❌ Нет, отменить', callback_data: 'reset_cancel' },
-                    ],
-                ],
-            },
-        };
-        await telegramService.sendMessage(chatId, MESSAGE.prompts.reset.confirm, confirmKeyboard);
+        await telegramService.sendMessage(
+            chatId,
+            MESSAGE.prompts.reset.confirm,
+            KeyboardUtil.getResetConfirmKeyboard
+        );
     }
 
     async handleAddWater(msg) {

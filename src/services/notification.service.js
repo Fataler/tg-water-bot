@@ -21,7 +21,7 @@ class NotificationService {
                 }
             } else {
                 logger.info('Scheduling reminders for all users');
-                this.jobs.forEach((job) => job.cancel());
+                this.jobs.forEach((jobs) => jobs.forEach((job) => job.cancel()));
                 this.jobs.clear();
 
                 const users = await dbService.getAllUsers();
@@ -36,10 +36,11 @@ class NotificationService {
     async cancelReminders(chatId) {
         try {
             logger.info(`Cancelling reminders for user ${chatId}`);
-            const job = this.jobs.get(chatId);
-            if (job) {
-                job.cancel();
+            const jobs = this.jobs.get(chatId);
+            if (jobs) {
+                jobs.forEach((job) => job.cancel());
                 this.jobs.delete(chatId);
+                logger.info(`Cancelled ${jobs.length} reminders for user ${chatId}`);
             }
         } catch (error) {
             logger.error('Error cancelling reminders:', error);
@@ -140,25 +141,28 @@ class NotificationService {
         this.cancelReminders(user.chat_id);
 
         if (!user.notification_enabled) {
+            logger.info(`Notifications disabled for user ${user.chat_id}`);
             return;
         }
 
         const times = ['12:00', '15:00', '18:00'];
+        const jobs = [];
 
         times.forEach((time) => {
             const [hours, minutes] = time.split(':').map(Number);
+            logger.info(`Scheduling reminder for user ${user.chat_id} at ${time}`);
 
             const job = schedule.scheduleJob({ hour: hours, minute: minutes }, async () => {
                 try {
-                    const todayStats = await dbService.getTodayStats(user.chat_id);
-                    const currentIntake = Math.round(todayStats.total * 1000); // конвертируем в мл
-                    const goal = user.daily_goal * 1000; // конвертируем в мл
+                    const todayStats = await dbService.getDailyWaterIntake(user.chat_id);
+                    const currentIntake = todayStats.total;
+                    const goal = user.daily_goal;
 
                     // Отправляем уведомление только если текущее потребление меньше цели
                     if (currentIntake < goal) {
                         await telegramService.sendMessage(
                             user.chat_id,
-                            MESSAGE.notifications.reminder(currentIntake, goal),
+                            MESSAGE.notifications.reminder.format(currentIntake, goal),
                             KeyboardUtil.getMainKeyboard()
                         );
 
@@ -166,13 +170,19 @@ class NotificationService {
                         await dbService.updateUser(user.chat_id, {
                             last_notification: Math.floor(Date.now() / 1000),
                         });
+                    } else {
+                        logger.info(`Skipping reminder for user ${user.chat_id} - goal reached`);
                     }
                 } catch (error) {
                     logger.error(`Error sending notification to user ${user.chat_id}:`, error);
                 }
             });
-            this.jobs.set(user.chat_id, job);
+            jobs.push(job);
         });
+
+        // Store all jobs for this user
+        this.jobs.set(user.chat_id, jobs);
+        logger.info(`Scheduled ${jobs.length} reminders for user ${user.chat_id}`);
     }
 
     getProgressBar(percentage) {

@@ -9,7 +9,9 @@ const MESSAGE = require('../../src/config/message.config');
 const config = require('../../src/config/config');
 
 // Мокаем все зависимости
-jest.mock('../../src/services/telegram.service', () => require('../../tests/mocks/telegram.service.mock'));
+jest.mock('../../src/services/telegram.service', () =>
+    require('../../tests/mocks/telegram.service.mock')
+);
 jest.mock('../../src/services/database.service');
 jest.mock('../../src/services/notification.service');
 jest.mock('../../src/utils/keyboard.util');
@@ -48,8 +50,8 @@ describe('CallbackHandler', () => {
         id: 'query123',
         message: {
             chat: { id: mockChatId },
-            message_id: mockMessageId
-        }
+            message_id: mockMessageId,
+        },
     };
 
     beforeEach(() => {
@@ -117,10 +119,10 @@ describe('CallbackHandler', () => {
     describe('handleDrinkIntake', () => {
         it('should handle custom water amount request', async () => {
             await CallbackHandler.handleDrinkIntake(mockChatId, 'custom', KEYBOARD.drinks.water.id);
-            
+
             expect(telegramService.sendMessage).toHaveBeenCalled();
-            expect(CallbackHandler.userTemp.get(mockChatId)).toEqual({ 
-                waitingFor: `custom_${KEYBOARD.drinks.water.id}` 
+            expect(CallbackHandler.userTemp.get(mockChatId)).toEqual({
+                waitingFor: `custom_${KEYBOARD.drinks.water.id}`,
             });
         });
 
@@ -133,8 +135,8 @@ describe('CallbackHandler', () => {
             await CallbackHandler.handleDrinkIntake(mockChatId, amount);
 
             expect(dbService.addWaterIntake).toHaveBeenCalledWith(
-                mockChatId, 
-                0.5, 
+                mockChatId,
+                0.5,
                 KEYBOARD.drinks.water.id
             );
         });
@@ -159,7 +161,7 @@ describe('CallbackHandler', () => {
         const mockStats = {
             water: 1.0,
             other: 0.5,
-            total: 1.5
+            total: 1.5,
         };
         const mockUser = { daily_goal: 2.5 };
 
@@ -238,7 +240,7 @@ describe('CallbackHandler', () => {
         it('should handle empty stats', async () => {
             const period = KEYBOARD.periods.today.id;
             const mockMessage = '❌ Нет данных для отображения статистики';
-            
+
             dbService.getDailyWaterIntake = jest.fn().mockResolvedValue(null);
             MESSAGE.stats.message = jest.fn().mockReturnValue(mockMessage);
 
@@ -254,7 +256,7 @@ describe('CallbackHandler', () => {
 
         it('should handle empty message', async () => {
             const period = KEYBOARD.periods.today.id;
-            
+
             dbService.getDailyWaterIntake = jest.fn().mockResolvedValue({});
             MESSAGE.stats.message = jest.fn().mockReturnValue('');
 
@@ -314,7 +316,7 @@ describe('CallbackHandler', () => {
         it('should reset user data when confirmed', async () => {
             await CallbackHandler.handleResetConfirmCallback(
                 mockChatId,
-                `reset-confirm_${KEYBOARD.reset.confirm.id}`,
+                `resetConfirm_${KEYBOARD.reset.confirm.id}`,
                 mockMessageId
             );
 
@@ -329,7 +331,7 @@ describe('CallbackHandler', () => {
         it('should handle reset cancellation', async () => {
             await CallbackHandler.handleResetConfirmCallback(
                 mockChatId,
-                `reset-confirm_${KEYBOARD.reset.cancel.id}`,
+                `resetConfirm_${KEYBOARD.reset.cancel.id}`,
                 mockMessageId
             );
 

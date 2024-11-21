@@ -154,6 +154,22 @@ class KeyboardUtil {
             },
         };
     }
+
+    static getResetConfirmKeyboard() {
+        return {
+            reply_markup: {
+                inline_keyboard: [
+                    [
+                        {
+                            text: KEYBOARD.reset.confirm.text,
+                            callback_data: 'resetConfirm_confirm',
+                        },
+                        { text: KEYBOARD.reset.cancel.text, callback_data: 'resetConfirm_cancel' },
+                    ],
+                ],
+            },
+        };
+    }
 }
 
 module.exports = KeyboardUtil;
