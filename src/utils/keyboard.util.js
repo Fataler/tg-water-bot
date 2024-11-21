@@ -4,7 +4,10 @@ class KeyboardUtil {
     static getMainKeyboard() {
         return {
             reply_markup: {
-                keyboard: [['💧 Добавить воду'], ['📊 Статистика', '⚙️ Настройки']],
+                keyboard: [
+                    [KEYBOARD.main.addWater.text],
+                    [KEYBOARD.main.stats.text, KEYBOARD.main.settings.text],
+                ],
                 resize_keyboard: true,
             },
         };
@@ -59,12 +62,10 @@ class KeyboardUtil {
     }
 
     static getCustomAmountKeyboard(type, message_id) {
-        // Преобразуем объект amounts из конфига в массив, исключая custom
         const amountEntries = Object.entries(KEYBOARD.amounts)
             .filter(([key]) => key !== 'custom')
             .sort((a, b) => parseFloat(a[0]) - parseFloat(b[0]));
 
-        // Разбиваем на ряды по 3 кнопки
         const amounts = [];
         for (let i = 0; i < amountEntries.length; i += 3) {
             amounts.push(amountEntries.slice(i, i + 3));
@@ -135,25 +136,19 @@ class KeyboardUtil {
     }
 
     static getGoalKeyboard() {
-        const goals = [
-            [
-                { text: '1.5', goal: 1.5 },
-                { text: '2', goal: 2 },
-                { text: '2.5', goal: 2.5 },
-            ],
-            [
-                { text: '3', goal: 3 },
-                { text: '3.5', goal: 3.5 },
-                { text: '4', goal: 4 },
-            ],
-        ];
+        const goalEntries = Object.entries(KEYBOARD.goals).sort((a, b) => a[1].value - b[1].value);
+
+        const goals = [];
+        for (let i = 0; i < goalEntries.length; i += 3) {
+            goals.push(goalEntries.slice(i, i + 3));
+        }
 
         return {
             reply_markup: {
                 inline_keyboard: goals.map((row) =>
-                    row.map((item) => ({
-                        text: item.text,
-                        callback_data: `goal_${item.goal}`,
+                    row.map((entry) => ({
+                        text: entry[1].text,
+                        callback_data: `goal_${entry[1].value}`,
                     }))
                 ),
             },
