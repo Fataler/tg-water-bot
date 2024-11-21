@@ -1,7 +1,9 @@
+const telegramService = require('../services/telegram.service');
+const KeyboardUtil = require('./keyboard.util');
 const ValidationUtil = require('./validation.util');
+const MESSAGE = require('../config/message.config');
 const config = require('../config/config');
 const KEYBOARD = require('../config/keyboard.config');
-const MESSAGE = require('../config/message.config');
 
 class MessageUtil {
     static formatWaterAddedMessage(amount, dailyIntake, goal) {

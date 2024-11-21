@@ -4,26 +4,46 @@ const telegramService = require('./telegram.service');
 const dbService = require('./database.service');
 const ValidationUtil = require('../utils/validation.util');
 const logger = require('../config/logger.config');
+const MESSAGE = require('../config/message.config');
+const { KeyboardUtil } = require('../utils/keyboard.util');
 
 class NotificationService {
     constructor() {
         this.jobs = new Map();
     }
 
-    async scheduleReminders() {
+    async scheduleReminders(chatId = null) {
         try {
-            logger.info('Scheduling reminders for all users');
-            this.jobs.forEach((job) => job.cancel());
-            this.jobs.clear();
-
-            const users = await dbService.getAllUsers();
-            users.forEach((user) => {
-                if (user.notification_enabled) {
+            if (chatId) {
+                logger.info(`Scheduling reminders for user ${chatId}`);
+                const user = await dbService.getUser(chatId);
+                if (user) {
                     this.scheduleUserReminder(user);
                 }
-            });
+            } else {
+                logger.info('Scheduling reminders for all users');
+                this.jobs.forEach((job) => job.cancel());
+                this.jobs.clear();
+
+                const users = await dbService.getAllUsers();
+                users.forEach((user) => this.scheduleUserReminder(user));
+            }
         } catch (error) {
             logger.error('Error scheduling reminders:', error);
+            throw error;
+        }
+    }
+
+    async cancelReminders(chatId) {
+        try {
+            logger.info(`Cancelling reminders for user ${chatId}`);
+            const job = this.jobs.get(chatId);
+            if (job) {
+                job.cancel();
+                this.jobs.delete(chatId);
+            }
+        } catch (error) {
+            logger.error('Error cancelling reminders:', error);
             throw error;
         }
     }
@@ -54,7 +74,7 @@ class NotificationService {
 
         // Проверяем минимальный интервал между уведомлениями
         if (user.last_notification) {
-            const lastNotification = new Date(user.last_notification);
+            const lastNotification = new Date(user.last_notification * 1000);
             const timeSinceLastNotification = now - lastNotification;
 
             if (timeSinceLastNotification < config.notifications.limits.minInterval) {
@@ -92,16 +112,19 @@ class NotificationService {
 
     async sendReminder(user, isTest = false) {
         try {
-            const dailyIntake = await dbService.getDailyIntake(user.chat_id);
-            const remainingWater = user.daily_goal - (dailyIntake?.total || 0);
+            logger.info('User data:', user);
+            const dailyIntake = await dbService.getDailyWaterIntake(user.chat_id);
+            logger.info('Daily intake:', dailyIntake);
 
             if (!isTest && !(await this.shouldSendNotification(user, dailyIntake))) {
                 return;
             }
 
-            const message = `💧 Не забудьте выпить воды!\n\nОсталось выпить: ${remainingWater}мл`;
+            const message = MESSAGE.notifications.reminder.format(dailyIntake.total * 1000, user.daily_goal * 1000);
+            logger.info('Sending reminder message:', message);
+            
             await telegramService.sendMessage(user.chat_id, message);
-            await dbService.updateUser(user.chat_id, { last_notification: new Date() });
+            await dbService.updateUser(user.chat_id, { last_notification: Math.floor(Date.now() / 1000) });
         } catch (error) {
             logger.error(`Error sending reminder to user ${user.chat_id}:`, error);
             throw error;
@@ -109,6 +132,13 @@ class NotificationService {
     }
 
     scheduleUserReminder(user) {
+        // Отменяем существующие напоминания
+        this.cancelReminders(user.chat_id);
+
+        if (!user.notification_enabled) {
+            return;
+        }
+
         const times = ['12:00', '15:00', '18:00'];
 
         times.forEach((time) => {
@@ -130,7 +160,7 @@ class NotificationService {
 
                         // Обновляем время последнего уведомления
                         await dbService.updateUser(user.chat_id, {
-                            last_notification_time: new Date(),
+                            last_notification: Math.floor(Date.now() / 1000)
                         });
                     }
                 } catch (error) {
@@ -147,47 +177,43 @@ class NotificationService {
         return '🟦'.repeat(filledCount) + '⬜️'.repeat(emptyCount);
     }
 
-    updateUserReminder(chatId) {
-        const user = this.jobs.get(chatId);
-        if (user) {
-            user.cancel();
+    async toggleNotifications(chatId, messageId) {
+        try {
+            const user = await dbService.getUser(chatId);
+            const notificationsEnabled = !user.notification_enabled;
+            await dbService.updateUser(chatId, { notification_enabled: notificationsEnabled });
+
+            const message = notificationsEnabled ? MESSAGE.notifications.enabled : MESSAGE.notifications.disabled;
+            const keyboard = KeyboardUtil.getMainKeyboard(notificationsEnabled);
+
+            await telegramService.editMessage(chatId, messageId, message, keyboard);
+
+            if (notificationsEnabled) {
+                await this.scheduleReminders(chatId);
+            } else {
+                await this.cancelReminders(chatId);
+            }
+        } catch (error) {
+            logger.error('Error toggling notifications:', error);
+            throw error;
         }
-
-        const times = ['12:00', '15:00', '18:00'];
-
-        times.forEach((time) => {
-            const [hours, minutes] = time.split(':').map(Number);
-
-            const job = schedule.scheduleJob({ hour: hours, minute: minutes }, async () => {
-                try {
-                    const todayStats = await dbService.getTodayStats(chatId);
-                    const currentIntake = Math.round(todayStats.total * 1000); // конвертируем в мл
-                    const goal = (await dbService.getUser(chatId)).daily_goal * 1000; // конвертируем в мл
-
-                    // Отправляем уведомление только если текущее потребление меньше цели
-                    if (currentIntake < goal) {
-                        await telegramService.sendMessage(
-                            chatId,
-                            MESSAGE.notifications.reminder(currentIntake, goal),
-                            KeyboardUtil.getMainKeyboard()
-                        );
-
-                        // Обновляем время последнего уведомления
-                        await dbService.updateUser(chatId, { last_notification_time: new Date() });
-                    }
-                } catch (error) {
-                    logger.error(`Error sending notification to user ${chatId}:`, error);
-                }
-            });
-            this.jobs.set(chatId, job);
-        });
     }
 
-    cancelUserReminders(chatId) {
-        const job = this.jobs.get(chatId);
-        if (job) {
-            job.cancel();
-            this.jobs.delete(chatId);
+    async sendNotification(chatId) {
+        try {
+            const user = await dbService.getUser(chatId);
+            if (!user || !user.notification_enabled) {
+                return;
+            }
+
+            const todayIntake = await dbService.getTodayIntake(chatId);
+            const message = MESSAGE.notifications.reminder.format(todayIntake, user.daily_goal);
+            const keyboard = KeyboardUtil.getMainKeyboard(user.notification_enabled);
+
+            await telegramService.sendMessage(chatId, message, keyboard);
+            await this.scheduleNotification(chatId);
+        } catch (error) {
+            logger.error('Error sending notification:', error);
         }
     }
 }

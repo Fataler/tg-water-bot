@@ -32,43 +32,43 @@ const MESSAGE = {
         goalSet: (goal) => `🎉 Отлично! Твоя цель - ${goal}л воды в день! 🎯`,
         waterAdded: (amount, daily, goal) => {
             const total = typeof daily === 'object' ? daily.total : daily;
-            const percent = Math.round((total / goal) * 100);
+            const percent = ValidationUtil.formatPercentage(total, goal);
             const progressEmoji = percent >= 100 ? '🌟' : '💪';
-            return `✅ Добавлено ${amount}л!\n\n💧 Всего за сегодня: ${total}л из ${goal}л\n📊 Прогресс: ${percent}%\n\n${progressEmoji} ${percent >= 100 ? 'Дневная цель достигнута! Молодец!' : 'Продолжай в том же духе!'}`;
+            const progressBar = ValidationUtil.createProgressBar(total, goal);
+            return `✅ Добавлено ${amount}л!\n\n💧 Всего за сегодня: ${total}л из ${goal}л\n${progressBar} ${percent}%\n\n${progressEmoji} ${percent >= 100 ? 'Дневная цель достигнута! Молодец!' : 'Продолжай в том же духе!'}`;
         },
         reset: '🔄 Все настройки сброшены. Напиши /start чтобы начать заново ✨',
     },
     stats: {
         header: '📊 Статистика потребления жидкости:\n\n',
-        today: '📆 Статистика за сегодня',
-        week: '📆 Статистика за неделю',
+        today: '📊 Статистика за сегодня',
+        week: '📊 Статистика за неделю',
         month: '📊 Статистика за месяц',
-        all: '📈 Общая статистика',
+        all: '📊 Статистика за все время',
         message: (title, stats, period, goal) => {
             if (!stats) {
                 return '❌ Нет данных для отображения статистики';
             }
 
+            const { water, other, total } = stats;
+            const percent = goal ? ValidationUtil.formatPercentage(total, goal) : 0;
+            const progressEmoji = percent >= 100 ? '🌟' : '💪';
+
             let message = `${title}:\n\n`;
-            const progressBar = ValidationUtil.createProgressBar(stats.total, goal);
+            message += `💧 Вода: ${water}л\n`;
+            message += `🥤 Другие напитки: ${other}л\n`;
+            message += `📈 Всего: ${total}л\n`;
 
             if (period === 'today') {
-                message += `💧 Вода: ${stats.water}л\n`;
-                message += `🥤 Другие напитки: ${stats.other}л\n`;
-                const percent = Math.round((stats.total / goal) * 100);
-                const progressEmoji = percent >= 100 ? '🌟' : '✨';
-                message += `📊 Всего: ${stats.total}л из ${goal}л (${percent}%)\n`;
-                message += `${progressEmoji} Прогресс: ${progressBar}`;
-            } else {
-                message += `💧 Всего выпито: ${stats.total}л\n`;
-                message += `📊 В среднем: ${stats.average}л в день\n`;
-                if (stats.maxDay) {
-                    message += `\n🏆 Лучший день: ${stats.maxDay.date} (${stats.maxDay.amount}л)\n`;
-                }
-                message += `\n${stats.total >= goal ? '🌟 Отличная работа!' : '💪 Так держать!'}`;
+                message += `\n🎯 Дневная цель: ${goal}л\n`;
+                message += `${ValidationUtil.createProgressBar(total, goal)} ${percent}%\n`;
+                message += `\n${progressEmoji} ${percent >= 100 ? 'Дневная цель достигнута! Молодец!' : 'Продолжай в том же духе!'}`;
             }
 
             return message;
+        },
+        errors: {
+            stats: '❌ Произошла ошибка при получении статистики. Попробуйте еще раз.',
         },
     },
     notifications: {
@@ -98,20 +98,20 @@ const MESSAGE = {
                 const progressBar = ValidationUtil.createProgressBar(currentAmount, goal);
 
                 return (
-                    `📊 Твоя водная статистика на сегодня:\n\n` +
+                    '📊 Твоя водная статистика на сегодня:\n\n' +
                     `🌊 Выпито: ${currentAmount} мл\n` +
                     `🎯 Цель: ${goal} мл\n` +
-                    `💧 Осталось: ${remaining} мл\n\n` +
+                    `${remaining > 0 ? `💧 Осталось: ${remaining} мл\n\n` : ''}` +
                     `Твой прогресс:\n${progressBar}`
                 );
             },
-        },
-        reminder: (currentIntake, goal) => {
-            const randomMessage =
-                MESSAGE.notifications.reminder.messages[
-                    Math.floor(Math.random() * MESSAGE.notifications.reminder.messages.length)
-                ];
-            return `${randomMessage}\n\n${MESSAGE.notifications.reminder.dailyStats(currentIntake, goal)}`;
+            format: (currentIntake, goal) => {
+                const randomMessage =
+                    MESSAGE.notifications.reminder.messages[
+                        Math.floor(Math.random() * MESSAGE.notifications.reminder.messages.length)
+                    ];
+                return `${randomMessage}\n\n${MESSAGE.notifications.reminder.dailyStats(currentIntake, goal)}`;
+            },
         },
     },
 };

@@ -131,7 +131,7 @@ class CommandHandler {
         try {
             const chatId = msg.chat.id;
 
-            if (chatId !== config.adminId) {
+            if (!config.adminIds.includes(chatId)) {
                 await telegramService.sendMessage(
                     chatId,
                     '⛔️ У вас нет прав для выполнения этой команды'

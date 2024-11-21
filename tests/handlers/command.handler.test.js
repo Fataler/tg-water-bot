@@ -9,7 +9,9 @@ const config = require('../../src/config/config');
 jest.mock('../../src/services/telegram.service', () => require('../../tests/mocks/telegram.service.mock'));
 jest.mock('../../src/services/database.service');
 jest.mock('../../src/services/notification.service', () => ({
-    sendReminder: jest.fn()
+    sendReminder: jest.fn(),
+    scheduleReminders: jest.fn(),
+    cancelReminders: jest.fn()
 }));
 jest.mock('../../src/utils/keyboard.util');
 jest.mock('../../src/config/config');
@@ -149,7 +151,7 @@ describe('CommandHandler', () => {
     describe('handleDebug', () => {
         it('should send test notification for admin', async () => {
             const mockUser = { chatId: mockChatId };
-            config.adminId = mockChatId;
+            config.adminIds = [mockChatId];
             dbService.getUser.mockResolvedValue(mockUser);
             
             await CommandHandler.handleDebug(mockMessage);
@@ -162,7 +164,7 @@ describe('CommandHandler', () => {
         });
 
         it('should handle unauthorized access', async () => {
-            config.adminId = 999999; // Different from mockChatId
+            config.adminIds = [999999]; // Different from mockChatId
             
             await CommandHandler.handleDebug(mockMessage);
             

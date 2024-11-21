@@ -14,6 +14,32 @@ jest.mock('../../src/services/database.service');
 jest.mock('../../src/services/notification.service');
 jest.mock('../../src/utils/keyboard.util');
 jest.mock('../../src/utils/validation.util');
+jest.mock('../../src/config/message.config', () => ({
+    errors: {
+        general: 'Error message',
+        stats: 'Stats error message',
+        validation: {
+            amount: (min, max) => `Amount should be between ${min} and ${max}`,
+        },
+    },
+    prompts: {
+        goal: {
+            set: 'Set goal message',
+            custom: 'Custom goal message',
+        },
+        reset: {
+            cancel: 'Reset cancelled message',
+        },
+        default: 'Default message',
+    },
+    success: {
+        goalSet: (goal) => `Goal set to ${goal}`,
+        reset: 'Reset success message',
+    },
+    stats: {
+        message: jest.fn(),
+    },
+}));
 
 describe('CallbackHandler', () => {
     const mockChatId = 123456;
@@ -79,7 +105,7 @@ describe('CallbackHandler', () => {
             await CallbackHandler.handleGoalCallback(mockChatId, `goal_${goal}`, mockMessageId);
 
             expect(dbService.addUser).toHaveBeenCalledWith(mockChatId, 2.5);
-            expect(notificationService.updateUserReminder).toHaveBeenCalledWith(mockChatId);
+            expect(notificationService.scheduleReminders).toHaveBeenCalledWith(mockChatId);
             expect(telegramService.sendMessage).toHaveBeenCalledWith(
                 mockChatId,
                 MESSAGE.success.goalSet(2.5),
@@ -130,15 +156,115 @@ describe('CallbackHandler', () => {
     });
 
     describe('handleStatsCallback', () => {
+        const mockStats = {
+            water: 1.0,
+            other: 0.5,
+            total: 1.5
+        };
+        const mockUser = { daily_goal: 2.5 };
+
+        beforeEach(() => {
+            dbService.getUser = jest.fn().mockResolvedValue(mockUser);
+            dbService.getDailyWaterIntake = jest.fn().mockResolvedValue(mockStats);
+            dbService.getWeeklyWaterIntake = jest.fn().mockResolvedValue(mockStats);
+            dbService.getMonthlyWaterIntake = jest.fn().mockResolvedValue(mockStats);
+            dbService.getAllTimeWaterIntake = jest.fn().mockResolvedValue(mockStats);
+        });
+
         it('should show daily stats', async () => {
             const period = KEYBOARD.periods.today.id;
-            dbService.getUser = jest.fn().mockResolvedValue({ daily_goal: 2.5 });
-            dbService.getDailyWaterIntake = jest.fn().mockResolvedValue(1.5);
+            const mockMessage = 'Mock daily stats';
+            MESSAGE.stats.message = jest.fn().mockReturnValue(mockMessage);
 
             await CallbackHandler.handleStatsCallback(mockChatId, `stats_${period}`, mockMessageId);
 
+            expect(dbService.getDailyWaterIntake).toHaveBeenCalled();
             expect(telegramService.deleteMessage).toHaveBeenCalledWith(mockChatId, mockMessageId);
-            expect(telegramService.sendMessage).toHaveBeenCalled();
+            expect(telegramService.sendMessage).toHaveBeenCalledWith(
+                mockChatId,
+                mockMessage,
+                KeyboardUtil.getMainKeyboard()
+            );
+        });
+
+        it('should show weekly stats', async () => {
+            const period = KEYBOARD.periods.week.id;
+            const mockMessage = 'Mock weekly stats';
+            MESSAGE.stats.message = jest.fn().mockReturnValue(mockMessage);
+
+            await CallbackHandler.handleStatsCallback(mockChatId, `stats_${period}`, mockMessageId);
+
+            expect(dbService.getWeeklyWaterIntake).toHaveBeenCalled();
+            expect(telegramService.deleteMessage).toHaveBeenCalledWith(mockChatId, mockMessageId);
+            expect(telegramService.sendMessage).toHaveBeenCalledWith(
+                mockChatId,
+                mockMessage,
+                KeyboardUtil.getMainKeyboard()
+            );
+        });
+
+        it('should show monthly stats', async () => {
+            const period = KEYBOARD.periods.month.id;
+            const mockMessage = 'Mock monthly stats';
+            MESSAGE.stats.message = jest.fn().mockReturnValue(mockMessage);
+
+            await CallbackHandler.handleStatsCallback(mockChatId, `stats_${period}`, mockMessageId);
+
+            expect(dbService.getMonthlyWaterIntake).toHaveBeenCalled();
+            expect(telegramService.deleteMessage).toHaveBeenCalledWith(mockChatId, mockMessageId);
+            expect(telegramService.sendMessage).toHaveBeenCalledWith(
+                mockChatId,
+                mockMessage,
+                KeyboardUtil.getMainKeyboard()
+            );
+        });
+
+        it('should show all time stats', async () => {
+            const period = KEYBOARD.periods.all.id;
+            const mockMessage = 'Mock all time stats';
+            MESSAGE.stats.message = jest.fn().mockReturnValue(mockMessage);
+
+            await CallbackHandler.handleStatsCallback(mockChatId, `stats_${period}`, mockMessageId);
+
+            expect(dbService.getAllTimeWaterIntake).toHaveBeenCalled();
+            expect(telegramService.deleteMessage).toHaveBeenCalledWith(mockChatId, mockMessageId);
+            expect(telegramService.sendMessage).toHaveBeenCalledWith(
+                mockChatId,
+                mockMessage,
+                KeyboardUtil.getMainKeyboard()
+            );
+        });
+
+        it('should handle empty stats', async () => {
+            const period = KEYBOARD.periods.today.id;
+            const mockMessage = '❌ Нет данных для отображения статистики';
+            
+            dbService.getDailyWaterIntake = jest.fn().mockResolvedValue(null);
+            MESSAGE.stats.message = jest.fn().mockReturnValue(mockMessage);
+
+            await CallbackHandler.handleStatsCallback(mockChatId, `stats_${period}`, null);
+
+            expect(telegramService.deleteMessage).not.toHaveBeenCalled();
+            expect(telegramService.sendMessage).toHaveBeenCalledWith(
+                mockChatId,
+                mockMessage,
+                KeyboardUtil.getMainKeyboard()
+            );
+        });
+
+        it('should handle empty message', async () => {
+            const period = KEYBOARD.periods.today.id;
+            
+            dbService.getDailyWaterIntake = jest.fn().mockResolvedValue({});
+            MESSAGE.stats.message = jest.fn().mockReturnValue('');
+
+            await CallbackHandler.handleStatsCallback(mockChatId, `stats_${period}`, mockMessageId);
+
+            expect(telegramService.sendMessage).toHaveBeenCalledWith(
+                mockChatId,
+                MESSAGE.errors.stats,
+                KeyboardUtil.getMainKeyboard()
+            );
         });
 
         it('should handle stats error', async () => {
@@ -193,7 +319,7 @@ describe('CallbackHandler', () => {
             );
 
             expect(dbService.deleteUser).toHaveBeenCalledWith(mockChatId);
-            expect(notificationService.cancelUserReminders).toHaveBeenCalledWith(mockChatId);
+            expect(notificationService.cancelReminders).toHaveBeenCalledWith(mockChatId);
             expect(telegramService.sendMessage).toHaveBeenCalledWith(
                 mockChatId,
                 MESSAGE.success.reset

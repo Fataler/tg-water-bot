@@ -66,7 +66,12 @@ class DatabaseService {
 
     async getUser(chatId) {
         try {
-            return this.db.prepare('SELECT * FROM users WHERE chat_id = ?').get(chatId);
+            const user = this.db.prepare('SELECT * FROM users WHERE chat_id = ?').get(chatId);
+            if (user) {
+                // Преобразуем notification_enabled в булево значение
+                user.notification_enabled = Boolean(user.notification_enabled);
+            }
+            return user;
         } catch (error) {
             logger.error('Error getting user:', error);
             throw error;
@@ -93,101 +98,19 @@ class DatabaseService {
     }
 
     async getDailyWaterIntake(userId) {
-        try {
-            const user = await this.getUser(userId);
-            if (!user) throw new Error('User not found');
-
-            const result = this.db
-                .prepare(
-                    `
-                SELECT 
-                    ROUND(COALESCE(SUM(CASE WHEN drink_type = 'water' THEN amount ELSE 0 END), 0), 2) as water,
-                    ROUND(COALESCE(SUM(CASE WHEN drink_type != 'water' THEN amount ELSE 0 END), 0), 2) as other,
-                    ROUND(COALESCE(SUM(amount), 0), 2) as total
-                FROM water_intake
-                WHERE user_id = ?
-                AND datetime(timestamp, 'localtime') >= datetime('now', 'localtime', 'start of day')
-                AND datetime(timestamp, 'localtime') < datetime('now', 'localtime', 'start of day', '+1 day')
-            `
-                )
-                .get(user.id);
-
-            return {
-                water: Number(result.water),
-                other: Number(result.other),
-                total: Number(result.total),
-            };
-        } catch (error) {
-            logger.error('Error getting daily water intake:', error);
-            throw error;
-        }
+        return this.getWaterIntakeHistory(userId, 1);
     }
 
-    async updateSettings(userId, settings) {
-        try {
-            const user = await this.getUser(userId);
-            if (!user) throw new Error('User not found');
-
-            const updates = [];
-            const params = [];
-
-            if (settings.hasOwnProperty('daily_goal')) {
-                updates.push('daily_goal = ?');
-                params.push(settings.daily_goal);
-            }
-
-            if (settings.hasOwnProperty('notification_enabled')) {
-                updates.push('notification_enabled = ?');
-                params.push(settings.notification_enabled ? 1 : 0);
-            }
-
-            if (updates.length === 0) return user;
-
-            params.push(userId);
-            const query = `UPDATE users SET ${updates.join(', ')} WHERE chat_id = ?`;
-            this.db.prepare(query).run(...params);
-
-            return this.getUser(userId);
-        } catch (error) {
-            logger.error('Error updating settings:', error);
-            throw error;
-        }
+    async getWeeklyWaterIntake(userId) {
+        return this.getWaterIntakeHistory(userId, 7);
     }
 
-    async updateUser(userId, updates) {
-        try {
-            const user = await this.getUser(userId);
-            if (!user) throw new Error('User not found');
+    async getMonthlyWaterIntake(userId) {
+        return this.getWaterIntakeHistory(userId, 30);
+    }
 
-            const updateFields = [];
-            const params = [];
-
-            if (updates.hasOwnProperty('daily_goal')) {
-                updateFields.push('daily_goal = ?');
-                params.push(updates.daily_goal);
-            }
-
-            if (updates.hasOwnProperty('notification_enabled')) {
-                updateFields.push('notification_enabled = ?');
-                params.push(updates.notification_enabled ? 1 : 0);
-            }
-
-            if (updates.hasOwnProperty('last_notification')) {
-                updateFields.push('last_notification = ?');
-                params.push(updates.last_notification.toISOString());
-            }
-
-            if (updateFields.length === 0) return user;
-
-            params.push(userId);
-            const query = `UPDATE users SET ${updateFields.join(', ')} WHERE chat_id = ?`;
-            this.db.prepare(query).run(...params);
-
-            return this.getUser(userId);
-        } catch (error) {
-            logger.error('Error updating user:', error);
-            throw error;
-        }
+    async getAllTimeWaterIntake(userId) {
+        return this.getWaterIntakeHistory(userId, 365);
     }
 
     async getWaterIntakeHistory(userId, limit = 5) {
@@ -208,37 +131,26 @@ class DatabaseService {
                 AND date(timestamp, 'localtime') >= date('now', '-' || ? || ' days', 'localtime')
                 GROUP BY date(timestamp, 'localtime')
                 ORDER BY date DESC
-            `
+                `
                 )
                 .all(user.id, limit);
 
             if (dailyIntakes.length === 0) {
                 return {
-                    total: 0,
-                    average: 0,
+                    water: 0,
+                    other: 0,
+                    total: 0
                 };
             }
 
             const total = dailyIntakes.reduce((sum, day) => sum + day.total, 0);
-            const average = Number((total / limit).toFixed(2));
-
-            let maxDay = dailyIntakes[0];
-            for (const day of dailyIntakes) {
-                if (day.total > maxDay.total) {
-                    maxDay = day;
-                }
-            }
+            const water = dailyIntakes.reduce((sum, day) => sum + day.water, 0);
+            const other = dailyIntakes.reduce((sum, day) => sum + day.other, 0);
 
             return {
-                total: Number(total.toFixed(2)),
-                average,
-                maxDay:
-                    dailyIntakes.length > 0
-                        ? {
-                              date: maxDay.date,
-                              amount: maxDay.total,
-                          }
-                        : null,
+                water: Number(water.toFixed(2)),
+                other: Number(other.toFixed(2)),
+                total: Number(total.toFixed(2))
             };
         } catch (error) {
             logger.error('Error getting water intake history:', error);
@@ -333,6 +245,31 @@ class DatabaseService {
             logger.info('User deleted successfully:', chatId);
         } catch (error) {
             logger.error('Error deleting user:', error);
+            throw error;
+        }
+    }
+
+    async updateUser(chatId, updates) {
+        try {
+            const user = await this.getUser(chatId);
+            if (!user) {
+                logger.warn('User not found for update:', chatId);
+                return;
+            }
+
+            const setClause = Object.entries(updates)
+                .map(([key]) => `${key} = ?`)
+                .join(', ');
+            const values = Object.values(updates);
+
+            this.db
+                .prepare(`UPDATE users SET ${setClause} WHERE chat_id = ?`)
+                .run(...values, chatId);
+
+            logger.info('User updated successfully:', chatId);
+            return await this.getUser(chatId);
+        } catch (error) {
+            logger.error('Error updating user:', error);
             throw error;
         }
     }

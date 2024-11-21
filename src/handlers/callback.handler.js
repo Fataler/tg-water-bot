@@ -1,44 +1,48 @@
+// Services
 const telegramService = require('../services/telegram.service');
-const dbService = require('../services/database.service');
+const databaseService = require('../services/database.service');
 const notificationService = require('../services/notification.service');
+
+// Utils
 const KeyboardUtil = require('../utils/keyboard.util');
 const ValidationUtil = require('../utils/validation.util');
-const MessageUtil = require('../utils/message.util');
-const config = require('../config/config');
+
+// Config
 const KEYBOARD = require('../config/keyboard.config');
 const MESSAGE = require('../config/message.config');
+const config = require('../config/config');
+const logger = require('../config/logger.config');
 
+/**
+ * Обработчик callback-запросов от Telegram бота
+ */
 class CallbackHandler {
     constructor() {
         this.userTemp = new Map();
+        this.handlers = {
+            goal: this.handleGoalCallback.bind(this),
+            water: this.handleWaterCallback.bind(this),
+            other: this.handleOtherDrinkCallback.bind(this),
+            drink: this.handleDrinkTypeCallback.bind(this),
+            stats: this.handleStatsCallback.bind(this),
+            settings: this.handleSettingsCallback.bind(this),
+            reset: this.handleResetCallback.bind(this),
+            'reset-confirm': this.handleResetConfirmCallback.bind(this),
+        };
     }
-
-    handlers = {
-        goal: (chatId, data, messageId) => this.handleGoalCallback(chatId, data, messageId),
-        water: (chatId, data, messageId) => this.handleWaterCallback(chatId, data, messageId),
-        other: (chatId, data, messageId) => this.handleOtherDrinkCallback(chatId, data, messageId),
-        drink: (chatId, data, messageId) => this.handleDrinkTypeCallback(chatId, data, messageId),
-        stats: (chatId, data, messageId) => this.handleStatsCallback(chatId, data, messageId),
-        settings: (chatId, data, messageId) => this.handleSettingsCallback(chatId, data, messageId),
-        reset: (chatId, data, messageId) => this.handleResetCallback(chatId, data, messageId),
-        'reset-confirm': (chatId, data, messageId) =>
-            this.handleResetConfirmCallback(chatId, data, messageId),
-    };
 
     async handleCallback(query) {
         const chatId = query.message.chat.id;
-        const messageId = query.message.message_id;
         const data = query.data;
 
         try {
-            const handlerName = data.includes('-') ? data.split('_')[0] : data.split('_')[0];
+            const handlerName = data.includes('-') ? data.split('-')[0] : data.split('_')[0];
             if (this.handlers[handlerName]) {
-                await this.handlers[handlerName](chatId, data, messageId);
+                await this.handlers[handlerName](chatId, data);
             }
-
             await telegramService.getBot().answerCallbackQuery(query.id);
         } catch (error) {
-            console.error('Error in callback handler:', error);
+            logger.error('Error in callback handler:', error);
             await telegramService.sendMessage(
                 chatId,
                 MESSAGE.errors.general,
@@ -47,8 +51,8 @@ class CallbackHandler {
         }
     }
 
-    async handleGoalCallback(chatId, data, messageId) {
-        const goal = data.split('_')[1];
+    async handleGoalCallback(chatId, data) {
+        const [, goal] = data.split('_');
 
         if (goal === 'custom') {
             await telegramService.sendMessage(chatId, MESSAGE.prompts.goal.set);
@@ -56,93 +60,103 @@ class CallbackHandler {
             return;
         }
 
-        const numGoal = parseFloat(goal);
-        if (ValidationUtil.isValidGoal(numGoal)) {
-            await dbService.addUser(chatId, numGoal);
-            await notificationService.updateUserReminder(chatId);
-            await telegramService.sendMessage(
-                chatId,
-                MESSAGE.success.goalSet(numGoal),
-                KeyboardUtil.getMainKeyboard()
-            );
-        }
+        const goalValue = parseFloat(goal);
+        await databaseService.addUser(chatId, goalValue);
+        await notificationService.scheduleReminders(chatId);
+        await telegramService.sendMessage(
+            chatId,
+            MESSAGE.success.goalSet(goalValue),
+            KeyboardUtil.getMainKeyboard()
+        );
     }
 
-    async handleDrinkIntake(chatId, amount, type = KEYBOARD.drinks.water.id) {
-        if (amount === 'custom') {
-            const message =
-                type === KEYBOARD.drinks.water.id
-                    ? MESSAGE.prompts.water.amount(
-                          config.validation.water.minAmount,
-                          config.validation.water.maxAmount
-                      )
-                    : MESSAGE.prompts.other.amount(
-                          config.validation.water.minAmount,
-                          config.validation.water.maxAmount
-                      );
-            await telegramService.sendMessage(chatId, message);
-            this.userTemp.set(chatId, { waitingFor: `custom_${type}` });
-            return;
-        }
-
-        const numAmount = parseFloat(amount);
-        if (!ValidationUtil.isValidAmount(numAmount)) {
-            await telegramService.sendMessage(
-                chatId,
-                MESSAGE.errors.validation.amount(
-                    config.validation.water.minAmount,
-                    config.validation.water.maxAmount
-                )
-            );
-            return;
-        }
+    async handleDrinkTypeCallback(chatId, data) {
+        const [, type] = data.split('_');
 
         try {
-            await dbService.addWaterIntake(chatId, numAmount, type);
-            const dailyIntake = await dbService.getDailyWaterIntake(chatId);
-            const user = await dbService.getUser(chatId);
-            const goal = user.daily_goal;
-
-            await notificationService.updateUserReminder(chatId);
-
-            await telegramService.sendMessage(
-                chatId,
-                MESSAGE.success.waterAdded(numAmount, dailyIntake, goal),
-                KeyboardUtil.getMainKeyboard()
-            );
+            switch (type) {
+                case KEYBOARD.drinks.water.id: {
+                    await telegramService.sendMessage(
+                        chatId,
+                        MESSAGE.prompts.water.amount(
+                            config.validation.water.minAmount,
+                            config.validation.water.maxAmount
+                        ),
+                        KeyboardUtil.getWaterAmountKeyboard()
+                    );
+                    break;
+                }
+                case KEYBOARD.drinks.other.id: {
+                    await telegramService.sendMessage(
+                        chatId,
+                        MESSAGE.prompts.other.amount(
+                            config.validation.water.minAmount,
+                            config.validation.water.maxAmount
+                        ),
+                        KeyboardUtil.getOtherAmountKeyboard()
+                    );
+                    break;
+                }
+                default: {
+                    logger.warn(`Unknown drink type: ${type}`);
+                }
+            }
         } catch (error) {
-            console.error('Error adding water intake:', error);
-            await telegramService.sendMessage(
-                chatId,
-                MESSAGE.errors.addWater,
-                KeyboardUtil.getMainKeyboard()
-            );
+            logger.error('Error handling drink type:', error);
+            await telegramService.sendMessage(chatId, MESSAGE.errors.general);
         }
     }
 
-    async handleWaterCallback(chatId, data, messageId) {
-        const [_, amount] = data.split('_');
-        await telegramService.deleteMessage(chatId, messageId);
+    async handleWaterCallback(chatId, data) {
+        const [, amount] = data.split('_');
         await this.handleDrinkIntake(chatId, amount, KEYBOARD.drinks.water.id);
     }
 
-    async handleOtherDrinkCallback(chatId, data, messageId) {
-        const [_, amount] = data.split('_');
-        await telegramService.deleteMessage(chatId, messageId);
+    async handleOtherDrinkCallback(chatId, data) {
+        const [, amount] = data.split('_');
         await this.handleDrinkIntake(chatId, amount, KEYBOARD.drinks.other.id);
-    }
-
-    async addWaterIntake(chatId, amount) {
-        await this.handleDrinkIntake(chatId, amount.toString());
     }
 
     async handleStatsCallback(chatId, data, messageId) {
         try {
             const period = data.split('_')[1];
-            await telegramService.deleteMessage(chatId, messageId);
-            await this.showStats(chatId, period);
+            if (messageId) {
+                await telegramService.deleteMessage(chatId, messageId);
+            }
+            const user = await databaseService.getUser(chatId);
+
+            let stats;
+            let messageType;
+
+            switch (period) {
+                case KEYBOARD.periods.today.id:
+                    stats = await databaseService.getDailyWaterIntake(chatId);
+                    messageType = MESSAGE.stats.today;
+                    break;
+                case KEYBOARD.periods.week.id:
+                    stats = await databaseService.getWeeklyWaterIntake(chatId);
+                    messageType = MESSAGE.stats.week;
+                    break;
+                case KEYBOARD.periods.month.id:
+                    stats = await databaseService.getMonthlyWaterIntake(chatId);
+                    messageType = MESSAGE.stats.month;
+                    break;
+                case KEYBOARD.periods.all.id:
+                    stats = await databaseService.getAllTimeWaterIntake(chatId);
+                    messageType = MESSAGE.stats.all;
+                    break;
+                default:
+                    stats = await databaseService.getDailyWaterIntake(chatId);
+                    messageType = MESSAGE.stats.today;
+            }
+
+            const message = MESSAGE.stats.message(messageType, stats, period, user.daily_goal);
+            if (!message) {
+                throw new Error('Empty stats message');
+            }
+            await telegramService.sendMessage(chatId, message, KeyboardUtil.getMainKeyboard());
         } catch (error) {
-            console.error('Error handling stats callback:', error);
+            logger.error('Error handling stats:', error);
             await telegramService.sendMessage(
                 chatId,
                 MESSAGE.errors.stats,
@@ -151,32 +165,35 @@ class CallbackHandler {
         }
     }
 
-    async handleSettingsCallback(chatId, data, messageId) {
-        const [_, setting] = data.split('_');
+    async handleSettingsCallback(chatId, data) {
+        const [, setting] = data.split('_');
 
         switch (setting) {
-            case KEYBOARD.settings.goal.id:
+            case KEYBOARD.settings.goal.id: {
                 await telegramService.sendMessage(
                     chatId,
                     MESSAGE.prompts.goal.custom,
                     KeyboardUtil.getGoalKeyboard()
                 );
                 break;
-            case KEYBOARD.settings.notifications.id:
-                const user = await dbService.getUser(chatId);
+            }
+            case KEYBOARD.settings.notifications.id: {
+                const user = await databaseService.getUser(chatId);
                 const newNotificationState = !user.notification_enabled;
 
-                await dbService.updateUser(chatId, { notification_enabled: newNotificationState });
+                await databaseService.updateUser(chatId, {
+                    notification_enabled: newNotificationState ? 1 : 0,
+                });
 
                 if (newNotificationState) {
-                    notificationService.updateUserReminder(chatId);
+                    await notificationService.scheduleReminders(chatId);
                     await telegramService.sendMessage(
                         chatId,
                         MESSAGE.notifications.enabled,
                         KeyboardUtil.getMainKeyboard()
                     );
                 } else {
-                    notificationService.cancelUserReminders(chatId);
+                    await notificationService.cancelReminders(chatId);
                     await telegramService.sendMessage(
                         chatId,
                         MESSAGE.notifications.disabled,
@@ -184,142 +201,31 @@ class CallbackHandler {
                     );
                 }
                 break;
-            default:
+            }
+            default: {
                 await telegramService.sendMessage(
                     chatId,
                     MESSAGE.prompts.default,
                     KeyboardUtil.getMainKeyboard()
                 );
-        }
-    }
-
-    async handleResetCallback(chatId, data, messageId) {
-        const confirmKeyboard = {
-            reply_markup: {
-                inline_keyboard: [
-                    [
-                        {
-                            text: KEYBOARD.reset.confirm.text,
-                            callback_data: `reset-confirm_${KEYBOARD.reset.confirm.id}`,
-                        },
-                        {
-                            text: KEYBOARD.reset.cancel.text,
-                            callback_data: `reset-confirm_${KEYBOARD.reset.cancel.id}`,
-                        },
-                    ],
-                ],
-            },
-        };
-
-        await telegramService.deleteMessage(chatId, messageId);
-        await telegramService.sendMessage(chatId, MESSAGE.prompts.reset.confirm, confirmKeyboard);
-    }
-
-    async handleDrinkTypeCallback(chatId, data, messageId) {
-        const type = data.split('_')[1];
-
-        try {
-            await telegramService.deleteMessage(chatId, messageId);
-
-            if (type === KEYBOARD.drinks.water.id) {
-                const message = await telegramService.sendMessage(
-                    chatId,
-                    MESSAGE.prompts.water.amount(
-                        config.validation.water.minAmount,
-                        config.validation.water.maxAmount
-                    ),
-                    KeyboardUtil.getWaterAmountKeyboard(0)
-                );
-                await telegramService.editMessage(
-                    chatId,
-                    message.message_id,
-                    MESSAGE.prompts.water.amount(
-                        config.validation.water.minAmount,
-                        config.validation.water.maxAmount
-                    ),
-                    KeyboardUtil.getWaterAmountKeyboard(message.message_id)
-                );
-            } else if (type === KEYBOARD.drinks.other.id) {
-                const message = await telegramService.sendMessage(
-                    chatId,
-                    MESSAGE.prompts.other.amount(
-                        config.validation.water.minAmount,
-                        config.validation.water.maxAmount
-                    ),
-                    KeyboardUtil.getOtherAmountKeyboard(0)
-                );
-                await telegramService.editMessage(
-                    chatId,
-                    message.message_id,
-                    MESSAGE.prompts.other.amount(
-                        config.validation.water.minAmount,
-                        config.validation.water.maxAmount
-                    ),
-                    KeyboardUtil.getOtherAmountKeyboard(message.message_id)
-                );
             }
-        } catch (error) {
-            console.error('Error handling drink type:', error);
-            await telegramService.sendMessage(chatId, MESSAGE.errors.general);
         }
     }
 
-    async handleStats(msg) {
-        const chatId = msg.chat.id;
-        const dailyIntake = await dbService.getDailyWaterIntake(chatId);
-        const user = await dbService.getUser(chatId);
-        const goal = user.daily_goal;
-
-        let message = MESSAGE.stats.header;
-        message += MessageUtil.formatDailyStats(dailyIntake, goal, { showEmoji: false });
-
-        await telegramService.sendMessage(chatId, message);
+    async handleResetCallback(chatId) {
+        await telegramService.sendMessage(
+            chatId,
+            MESSAGE.prompts.reset.confirm,
+            KeyboardUtil.getResetConfirmKeyboard()
+        );
     }
 
-    async showStats(chatId, period) {
-        try {
-            const user = await dbService.getUser(chatId);
-            let stats;
-            let title;
-
-            switch (period) {
-                case KEYBOARD.periods.today.id:
-                    stats = await dbService.getDailyWaterIntake(chatId);
-                    title = MESSAGE.stats.today;
-                    break;
-                case KEYBOARD.periods.week.id:
-                    stats = await dbService.getWaterIntakeHistory(chatId, 7);
-                    title = MESSAGE.stats.week;
-                    break;
-                case KEYBOARD.periods.month.id:
-                    stats = await dbService.getWaterIntakeHistory(chatId, 30);
-                    title = MESSAGE.stats.month;
-                    break;
-                case KEYBOARD.periods.all.id:
-                    stats = await dbService.getWaterStats(chatId);
-                    title = MESSAGE.stats.all;
-                    break;
-            }
-
-            const message = MESSAGE.stats.message(title, stats, period, user.daily_goal);
-            await telegramService.sendMessage(chatId, message, KeyboardUtil.getMainKeyboard());
-        } catch (error) {
-            console.error('Error showing stats:', error);
-            await telegramService.sendMessage(
-                chatId,
-                MESSAGE.errors.stats,
-                KeyboardUtil.getMainKeyboard()
-            );
-        }
-    }
-
-    async handleResetConfirmCallback(chatId, data, messageId) {
-        const action = data.split('_')[1];
-        await telegramService.deleteMessage(chatId, messageId);
+    async handleResetConfirmCallback(chatId, data) {
+        const [, action] = data.split('_');
 
         if (action === KEYBOARD.reset.confirm.id) {
-            await dbService.deleteUser(chatId);
-            notificationService.cancelUserReminders(chatId);
+            await databaseService.deleteUser(chatId);
+            await notificationService.cancelReminders(chatId);
             await telegramService.sendMessage(chatId, MESSAGE.success.reset);
         } else {
             await telegramService.sendMessage(
@@ -327,6 +233,47 @@ class CallbackHandler {
                 MESSAGE.prompts.reset.cancel,
                 KeyboardUtil.getMainKeyboard()
             );
+        }
+    }
+
+    async handleDrinkIntake(chatId, amount, type = KEYBOARD.drinks.water.id) {
+        try {
+            if (amount === 'custom') {
+                this.userTemp.set(chatId, { waitingFor: `custom_${type}` });
+                await telegramService.sendMessage(
+                    chatId,
+                    MESSAGE.prompts.water.amount(
+                        config.validation.water.minAmount,
+                        config.validation.water.maxAmount
+                    )
+                );
+                return;
+            }
+
+            const intakeAmount = parseFloat(amount);
+            if (!ValidationUtil.isValidAmount(intakeAmount)) {
+                await telegramService.sendMessage(
+                    chatId,
+                    MESSAGE.errors.validation.amount(
+                        config.validation.water.minAmount,
+                        config.validation.water.maxAmount
+                    )
+                );
+                return;
+            }
+
+            await databaseService.addWaterIntake(chatId, intakeAmount, type);
+            const todayIntake = await databaseService.getDailyWaterIntake(chatId);
+            const user = await databaseService.getUser(chatId);
+
+            await telegramService.sendMessage(
+                chatId,
+                MESSAGE.success.waterAdded(intakeAmount, todayIntake, user.daily_goal),
+                KeyboardUtil.getMainKeyboard()
+            );
+        } catch (error) {
+            logger.error('Error handling drink intake:', error);
+            await telegramService.sendMessage(chatId, MESSAGE.errors.general);
         }
     }
 
