@@ -4,6 +4,7 @@ const notificationService = require('../services/notification.service');
 const KeyboardUtil = require('../utils/keyboard.util');
 const config = require('../config/config');
 const logger = require('../config/logger.config');
+const MESSAGE = require('../config/message.config');
 
 class CommandHandler {
     async handleStart(msg) {
@@ -13,15 +14,14 @@ class CommandHandler {
         if (!user) {
             await telegramService.sendMessage(
                 chatId,
-                '👋 Привет! Я помогу тебе следить за потреблением воды. 💧\n\n' +
-                    '🎯 Давай для начала установим твою цель на день:',
+                MESSAGE.commands.start.welcome,
                 KeyboardUtil.getGoalKeyboard()
             );
         } else {
             try {
                 await telegramService.sendMessage(
                     chatId,
-                    '👋 С возвращением! Что будем делать? 💪',
+                    MESSAGE.commands.start.welcome_back,
                     KeyboardUtil.getMainKeyboard()
                 );
             } catch (error) {
@@ -52,7 +52,7 @@ class CommandHandler {
         };
         await telegramService.sendMessage(
             chatId,
-            '⚠️ Ты уверен(а), что хочешь сбросить все настройки?',
+            MESSAGE.prompts.reset.confirm,
             confirmKeyboard
         );
     }
@@ -61,7 +61,7 @@ class CommandHandler {
         const chatId = msg.chat.id;
         await telegramService.sendMessage(
             chatId,
-            '🥤 Что ты выпил(а)?',
+            MESSAGE.commands.addWater,
             KeyboardUtil.getDrinkTypeKeyboard()
         );
     }
@@ -70,7 +70,7 @@ class CommandHandler {
         const chatId = msg.chat.id;
         await telegramService.sendMessage(
             chatId,
-            '📊 За какой период показать статистику?',
+            MESSAGE.commands.stats,
             KeyboardUtil.getStatsKeyboard()
         );
     }
@@ -83,7 +83,7 @@ class CommandHandler {
                 // First send the message with initial keyboard
                 const message = await telegramService.sendMessage(
                     chatId,
-                    '⚙️ Настройки:',
+                    MESSAGE.commands.settings,
                     KeyboardUtil.getSettingsKeyboard(user, null)
                 );
 
@@ -91,14 +91,14 @@ class CommandHandler {
                 await telegramService.editMessage(
                     chatId,
                     message.message_id,
-                    '⚙️ Настройки:',
+                    MESSAGE.commands.settings,
                     KeyboardUtil.getSettingsKeyboard(user, message.message_id)
                 );
             } catch (error) {
                 logger.error('Error handling settings:', error);
                 await telegramService.sendMessage(
                     chatId,
-                    '❌ Произошла ошибка. Попробуйте еще раз.',
+                    MESSAGE.errors.general,
                     KeyboardUtil.getMainKeyboard()
                 );
             }
@@ -107,54 +107,31 @@ class CommandHandler {
 
     async handleHelp(msg) {
         const chatId = msg.chat.id;
-        const helpText =
-            '🚰 *Помощь по использованию бота*\n\n' +
-            '*Основные команды:*\n' +
-            '💧 Добавить воду - записать выпитую воду\n' +
-            '📊 Статистика - просмотр статистики потребления\n' +
-            '⚙️ Настройки - изменение настроек\n' +
-            '\n*Дополнительные команды:*\n' +
-            '/start - перезапуск бота\n' +
-            '/reset - сброс настроек\n' +
-            '/help - показать эту справку\n' +
-            '\n*Как пользоваться:*\n' +
-            '1. Установите дневную цель потребления воды\n' +
-            '2. Настройте время напоминаний\n' +
-            '3. Каждый раз когда пьёте воду, нажимайте "💧 Добавить воду"\n' +
-            '4. Следите за прогрессом в разделе "📊 Статистика"';
-
-        await telegramService.sendMessage(chatId, helpText, { parse_mode: 'Markdown' });
+        await telegramService.sendMessage(chatId, MESSAGE.commands.help, { parse_mode: 'Markdown' });
     }
 
     async handleDebug(msg) {
         try {
-            const userId = msg.from.id; // ID пользователя, а не чата
+            const userId = msg.from.id;
             const chatId = msg.chat.id;
 
             if (!config.adminIds.includes(userId)) {
-                // Проверяем ID пользователя
-                await telegramService.sendMessage(
-                    chatId,
-                    '⛔️ У вас нет прав для выполнения этой команды'
-                );
+                await telegramService.sendMessage(chatId, MESSAGE.errors.noAccess);
                 return;
             }
 
             const user = await dbService.getUser(chatId);
 
             if (!user) {
-                await telegramService.sendMessage(chatId, 'Пользователь не найден в базе данных');
+                await telegramService.sendMessage(chatId, MESSAGE.errors.userNotFound);
                 return;
             }
 
             await notificationService.sendReminder(user, true);
-            await telegramService.sendMessage(chatId, '✅ Тестовое уведомление отправлено');
+            await telegramService.sendMessage(chatId, MESSAGE.commands.debug.testNotificationSent);
         } catch (error) {
             logger.error('Error in debug command:', error);
-            await telegramService.sendMessage(
-                msg.chat.id,
-                'Произошла ошибка при отправке тестового уведомления'
-            );
+            await telegramService.sendMessage(chatId, MESSAGE.errors.general);
         }
     }
 

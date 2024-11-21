@@ -4,6 +4,7 @@ const KeyboardUtil = require('../utils/keyboard.util');
 const ValidationUtil = require('../utils/validation.util');
 const callbackHandler = require('./callback.handler');
 const config = require('../config/config');
+const MESSAGE = require('../config/message.config');
 
 class MessageHandler {
     async handleMessage(msg) {
@@ -25,7 +26,7 @@ class MessageHandler {
         if (!amount) {
             await telegramService.sendMessage(
                 chatId,
-                '⚠️ Укажи корректное число.',
+                MESSAGE.errors.validation.invalidNumber,
                 KeyboardUtil.getMainKeyboard()
             );
             return;
@@ -37,13 +38,16 @@ class MessageHandler {
                     await dbService.addUser(chatId, amount);
                     await telegramService.sendMessage(
                         chatId,
-                        '🎯 Цель установлена! Можешь начинать отслеживать потребление воды.',
+                        MESSAGE.success.goalSet,
                         KeyboardUtil.getMainKeyboard()
                     );
                 } else {
                     await telegramService.sendMessage(
                         chatId,
-                        `⚠️ Цель должна быть от ${config.validation.water.minAmount} до ${config.validation.water.maxAmount * 2} литров.`
+                        MESSAGE.errors.validation.goal(
+                            config.validation.water.minAmount,
+                            config.validation.water.maxAmount * 2
+                        )
                     );
                 }
                 break;
@@ -59,7 +63,10 @@ class MessageHandler {
                 } else {
                     await telegramService.sendMessage(
                         chatId,
-                        `⚠️ Количество должно быть от ${config.validation.water.minAmount} до ${config.validation.water.maxAmount} литров.`
+                        MESSAGE.errors.validation.amount(
+                            config.validation.water.minAmount,
+                            config.validation.water.maxAmount
+                        )
                     );
                 }
                 break;
