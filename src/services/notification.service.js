@@ -7,7 +7,10 @@ const MESSAGE = require('../config/message.config');
 const logger = require('../config/logger.config');
 
 class NotificationService {
-    constructor() {
+    constructor(dbService, telegramService, logger) {
+        this.dbService = dbService;
+        this.telegramService = telegramService;
+        this.logger = logger;
         this.jobs = new Map();
     }
 
@@ -67,12 +70,10 @@ class NotificationService {
             return false;
         }
 
-        // Проверяем, достигнута ли дневная цель
         if (dailyIntake.total >= user.daily_goal) {
             return false;
         }
 
-        // Проверяем минимальный интервал между уведомлениями
         if (user.last_notification) {
             const lastNotification = new Date(user.last_notification * 1000);
             const timeSinceLastNotification = now - lastNotification;
@@ -110,71 +111,50 @@ class NotificationService {
         return expected;
     }
 
-    async sendReminder(user, isTest = false) {
-        try {
-            logger.info('User data:', user);
-            const dailyIntake = await dbService.getDailyWaterIntake(user.chat_id);
-            logger.info('Daily intake:', dailyIntake);
+    async sendWaterReminder(user) {
+        const todayStats = await this.dbService.getDailyWaterIntake(user.id);
+        const currentIntake = todayStats.total;
+        const goal = user.daily_goal;
 
-            if (!isTest && !(await this.shouldSendNotification(user, dailyIntake))) {
-                return;
-            }
-
-            const message = MESSAGE.notifications.reminder.format(
-                dailyIntake.total,
-                user.daily_goal
+        if (currentIntake < goal) {
+            await this.telegramService.sendMessage(
+                user.chat_id,
+                MESSAGE.notifications.reminder.format(currentIntake, goal),
+                KeyboardUtil.getMainKeyboard()
             );
-            logger.info('Sending reminder message:', message);
 
-            await telegramService.sendMessage(user.chat_id, message);
-            await dbService.updateUser(user.chat_id, {
+            await this.dbService.updateUser(user.chat_id, {
                 last_notification: Math.floor(Date.now() / 1000),
             });
-        } catch (error) {
-            logger.error(`Error sending reminder to user ${user.chat_id}:`, error);
-            throw error;
+
+            return true;
+        } else {
+            this.logger.info(`Skipping reminder for user ${user.chat_id} - goal reached`);
+            return false;
         }
     }
 
-    scheduleUserReminder(user) {
+    async scheduleUserReminder(user) {
         // Отменяем существующие напоминания
         this.cancelReminders(user.chat_id);
 
         if (!user.notification_enabled) {
-            logger.info(`Notifications disabled for user ${user.chat_id}`);
+            this.logger.info(`Notifications disabled for user ${user.id}`);
             return;
         }
 
-        const times = ['12:00', '15:00', '18:00'];
+        const times = ['11:00', '14:00', '17:00'];
         const jobs = [];
 
         times.forEach((time) => {
             const [hours, minutes] = time.split(':').map(Number);
-            logger.info(`Scheduling reminder for user ${user.chat_id} at ${time}`);
+            this.logger.info(`Scheduling reminder for user ${user.id} at ${time}`);
 
             const job = schedule.scheduleJob({ hour: hours, minute: minutes }, async () => {
                 try {
-                    const todayStats = await dbService.getDailyWaterIntake(user.chat_id);
-                    const currentIntake = todayStats.total;
-                    const goal = user.daily_goal;
-
-                    // Отправляем уведомление только если текущее потребление меньше цели
-                    if (currentIntake < goal) {
-                        await telegramService.sendMessage(
-                            user.chat_id,
-                            MESSAGE.notifications.reminder.format(currentIntake, goal),
-                            KeyboardUtil.getMainKeyboard()
-                        );
-
-                        // Обновляем время последнего уведомления
-                        await dbService.updateUser(user.chat_id, {
-                            last_notification: Math.floor(Date.now() / 1000),
-                        });
-                    } else {
-                        logger.info(`Skipping reminder for user ${user.chat_id} - goal reached`);
-                    }
+                    await this.sendWaterReminder(user);
                 } catch (error) {
-                    logger.error(`Error sending notification to user ${user.chat_id}:`, error);
+                    this.logger.error(`Error sending notification to user ${user.chat_id}:`, error);
                 }
             });
             jobs.push(job);
@@ -182,7 +162,7 @@ class NotificationService {
 
         // Store all jobs for this user
         this.jobs.set(user.chat_id, jobs);
-        logger.info(`Scheduled ${jobs.length} reminders for user ${user.chat_id}`);
+        this.logger.info(`Scheduled ${jobs.length} reminders for user ${user.chat_id}`);
     }
 
     getProgressBar(percentage) {
@@ -214,24 +194,6 @@ class NotificationService {
             throw error;
         }
     }
-
-    async sendNotification(chatId) {
-        try {
-            const user = await dbService.getUser(chatId);
-            if (!user || !user.notification_enabled) {
-                return;
-            }
-
-            const todayIntake = await dbService.getTodayIntake(chatId);
-            const message = MESSAGE.notifications.reminder.format(todayIntake, user.daily_goal);
-            const keyboard = KeyboardUtil.getMainKeyboard(user.notification_enabled);
-
-            await telegramService.sendMessage(chatId, message, keyboard);
-            await this.scheduleNotification(chatId);
-        } catch (error) {
-            logger.error('Error sending notification:', error);
-        }
-    }
 }
 
-module.exports = new NotificationService();
+module.exports = new NotificationService(dbService, telegramService, logger);

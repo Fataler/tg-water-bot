@@ -119,8 +119,12 @@ class CommandHandler {
                 return;
             }
 
-            await notificationService.sendReminder(user, true);
-            await telegramService.sendMessage(chatId, MESSAGE.commands.debug.testNotificationSent);
+            const sent = await notificationService.sendWaterReminder(user);
+            if (sent) {
+                await telegramService.sendMessage(chatId, MESSAGE.commands.debug.testNotificationSent);
+            } else {
+                await telegramService.sendMessage(chatId, 'Уведомление не отправлено - цель достигнута');
+            }
         } catch (error) {
             logger.error('Error in debug command:', error);
             await telegramService.sendMessage(msg.chat.id, MESSAGE.errors.general);

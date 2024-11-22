@@ -2,7 +2,8 @@ const config = require('../config/config');
 
 class ValidationUtil {
     static isValidAmount(amount) {
-        const numAmount = parseFloat(amount);
+        const normalizedAmount = String(amount).replace(',', '.');
+        const numAmount = parseFloat(normalizedAmount);
         return (
             !isNaN(numAmount) &&
             numAmount >= config.validation.water.minAmount &&
@@ -29,7 +30,8 @@ class ValidationUtil {
     }
 
     static sanitizeNumber(input) {
-        const num = parseFloat(input);
+        const normalizedInput = String(input).replace(',', '.');
+        const num = parseFloat(normalizedInput);
         return isNaN(num) ? null : Math.max(0, Math.min(num, config.validation.water.maxAmount));
     }
 
@@ -47,6 +49,14 @@ class ValidationUtil {
         const filledBlocks = Math.floor(percentage / 10);
         const emptyBlocks = 10 - filledBlocks;
         return '🌊'.repeat(filledBlocks) + '⚪️'.repeat(emptyBlocks);
+    }
+
+    static createRatioBar(water, other) {
+        const total = water + other;
+        if (total === 0) return '⚪️'.repeat(10);
+        const waterRatio = Math.floor((water / total) * 10);
+        const otherRatio = 10 - waterRatio;
+        return '💧'.repeat(waterRatio) + '🥤'.repeat(otherRatio);
     }
 }
 
