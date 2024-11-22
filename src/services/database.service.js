@@ -92,7 +92,7 @@ class DatabaseService {
     }
 
     async aggregateWaterIntake(rows) {
-        if (rows.length === 0) {
+        if (!rows || rows.length === 0) {
             return {
                 water: 0,
                 other: 0,
@@ -100,9 +100,9 @@ class DatabaseService {
             };
         }
 
-        const water = rows.reduce((sum, day) => sum + day.water, 0);
-        const other = rows.reduce((sum, day) => sum + day.other, 0);
-        const total = rows.reduce((sum, day) => sum + day.total, 0);
+        const water = rows.reduce((sum, day) => sum + (Number(day.water) || 0), 0);
+        const other = rows.reduce((sum, day) => sum + (Number(day.other) || 0), 0);
+        const total = water + other;
 
         return {
             water: Number(water.toFixed(2)),
@@ -114,7 +114,14 @@ class DatabaseService {
     async getDailyWaterIntake(userId) {
         try {
             const rows = await this.getWaterIntakeHistory(userId, 1);
-            return rows[0] || this.aggregateWaterIntake([]);
+            if (rows.length === 0) {
+                return this.aggregateWaterIntake([]);
+            }
+            return {
+                water: Number(rows[0].water.toFixed(2)),
+                other: Number(rows[0].other.toFixed(2)),
+                total: Number(rows[0].total.toFixed(2))
+            };
         } catch (error) {
             logger.error('Error getting daily water intake:', error);
             throw error;
@@ -124,7 +131,43 @@ class DatabaseService {
     async getWeeklyWaterIntake(userId) {
         try {
             const rows = await this.getWaterIntakeHistory(userId, 7);
-            return this.aggregateWaterIntake(rows);
+            
+            // Calculate current week totals
+            const currentData = rows.reduce((acc, row) => ({
+                water: acc.water + Number(row.water || 0),
+                other: acc.other + Number(row.other || 0),
+                total: acc.total + Number(row.total || 0)
+            }), { water: 0, other: 0, total: 0 });
+            
+            // Format daily data with proper defaults
+            const daily = rows.map(row => ({
+                date: row.date,
+                water: Number(row.water || 0),
+                other: Number(row.other || 0),
+                total: Number(row.total || 0)
+            }));
+
+            // Get previous week data
+            const previousRows = await this.getWaterIntakeHistory(userId, 14);
+            const previousWeekData = previousRows.slice(7).reduce((acc, row) => ({
+                water: acc.water + Number(row.water || 0),
+                other: acc.other + Number(row.other || 0),
+                total: acc.total + Number(row.total || 0)
+            }), { water: 0, other: 0, total: 0 });
+            
+            return {
+                current: {
+                    water: currentData.water.toFixed(2),
+                    other: currentData.other.toFixed(2),
+                    total: currentData.total.toFixed(2)
+                },
+                daily,
+                previous: {
+                    water: previousWeekData.water.toFixed(2),
+                    other: previousWeekData.other.toFixed(2),
+                    total: previousWeekData.total.toFixed(2)
+                }
+            };
         } catch (error) {
             logger.error('Error getting weekly water intake:', error);
             throw error;
@@ -133,10 +176,68 @@ class DatabaseService {
 
     async getMonthlyWaterIntake(userId) {
         try {
-            const now = new Date();
-            const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
-            const rows = await this.getWaterIntakeHistory(userId, daysInMonth);
-            return this.aggregateWaterIntake(rows);
+            const daysInMonth = 30;
+            const allRows = await this.getWaterIntakeHistory(userId, daysInMonth * 2);
+
+            // Get current month data
+            const rows = allRows.slice(0, daysInMonth);
+            const currentData = rows.reduce((acc, row) => ({
+                water: acc.water + Number(row.water || 0),
+                other: acc.other + Number(row.other || 0),
+                total: acc.total + Number(row.total || 0)
+            }), { water: 0, other: 0, total: 0 });
+
+            // Format daily data
+            const daily = rows.map(row => ({
+                date: row.date,
+                water: Number(row.water || 0),
+                other: Number(row.other || 0),
+                total: Number(row.total || 0)
+            }));
+
+            // Get previous month data
+            const previousMonthData = allRows.slice(daysInMonth).reduce((acc, row) => ({
+                water: acc.water + Number(row.water || 0),
+                other: acc.other + Number(row.other || 0),
+                total: acc.total + Number(row.total || 0)
+            }), { water: 0, other: 0, total: 0 });
+
+            // Group data by weeks for current month
+            const weeklyData = [];
+            for (let i = 0; i < rows.length; i += 7) {
+                const weekRows = rows.slice(i, Math.min(i + 7, rows.length));
+                if (weekRows.length > 0) {
+                    const weekData = weekRows.reduce((acc, row) => ({
+                        water: acc.water + Number(row.water || 0),
+                        other: acc.other + Number(row.other || 0),
+                        total: acc.total + Number(row.total || 0)
+                    }), { water: 0, other: 0, total: 0 });
+                    
+                    if (weekData.total > 0) {
+                        weeklyData.push({
+                            week: Math.floor(i / 7) + 1,
+                            water: weekData.water.toFixed(2),
+                            other: weekData.other.toFixed(2),
+                            total: weekData.total.toFixed(2)
+                        });
+                    }
+                }
+            }
+            
+            return {
+                current: {
+                    water: currentData.water.toFixed(2),
+                    other: currentData.other.toFixed(2),
+                    total: currentData.total.toFixed(2)
+                },
+                weekly: weeklyData,
+                previous: {
+                    water: previousMonthData.water.toFixed(2),
+                    other: previousMonthData.other.toFixed(2),
+                    total: previousMonthData.total.toFixed(2)
+                },
+                daily
+            };
         } catch (error) {
             logger.error('Error getting monthly water intake:', error);
             throw error;
