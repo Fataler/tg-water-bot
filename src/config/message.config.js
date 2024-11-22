@@ -86,7 +86,7 @@ const MESSAGE = {
 
             if (percent < 100) {
                 const remaining = (goal - total).toFixed(2);
-                message += `\n💧 Осталось выпить: ${remaining}л\n`;
+                message += `💧 Осталось выпить: ${remaining}л\n`;
             }
 
             message += `\n${ValidationUtil.createProgressBar(total, goal)} ${percent}%\n`;
