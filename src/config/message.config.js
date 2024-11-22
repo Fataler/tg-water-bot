@@ -82,7 +82,7 @@ const MESSAGE = {
         formatDailyProgress: (total, goal) => {
             const percent = goal ? ValidationUtil.formatPercentage(total, goal) : 0;
             const progressEmoji = percent >= 100 ? '🌟' : '💪';
-            let message = `\n🎯 Дневная цель: ${goal}л\n`;
+            let message = `🎯 Дневная цель: ${goal}л\n`;
 
             if (percent < 100) {
                 const remaining = (goal - total).toFixed(2);
@@ -99,61 +99,97 @@ const MESSAGE = {
                 return '❌ Нет данных для отображения статистики';
             }
 
-            let message = `${title}:\n\n`;
+            let message = `${title}:\n`;
+            let water = 0,
+                other = 0,
+                total = 0;
 
-            const { water, other, total } = stats;
-            message += `💧 Вода: ${water}л\n`;
-            message += `🥤 Другие напитки: ${other}л\n`;
-            message += `📈 Всего: ${total}л\n`;
+            if (period === 'week' && stats.daily) {
+                stats.daily.forEach((day) => {
+                    water += Number(day.water) || 0;
+                    other += Number(day.other) || 0;
+                });
+            } else if (period === 'month' && stats.weekly) {
+                stats.weekly.forEach((week) => {
+                    water += Number(week.water) || 0;
+                    other += Number(week.other) || 0;
+                });
+            } else {
+                ({ water, other, total } = stats);
+                water = Number(water) || 0;
+                other = Number(other) || 0;
+            }
+
+            total = water + other;
+
+            message += '\n📊 ОБЩИЕ ПОКАЗАТЕЛИ\n';
+            message += '━━━━━━━━━━━━━━━━\n';
+            message += `💧 Вода: ${water.toFixed(2)}л\n`;
+            message += `🥤 Другие напитки: ${other.toFixed(2)}л\n`;
+            message += `📈 Всего выпито: ${total.toFixed(2)}л\n`;
 
             if (total > 0) {
-                message += `\n${ValidationUtil.createRatioBar(water, other)}\n`;
+                message += '━━━━━━━━━━━━━━━━\n';
+                message += `${ValidationUtil.createRatioBar(water, other)}\n`;
+                message += '━━━━━━━━━━━━━━━━\n';
             }
 
             if (period === 'today') {
+                message += '\n🎯 ДНЕВНАЯ ЦЕЛЬ\n';
+                message += '━━━━━━━━━━━━━━━━\n';
                 message += MESSAGE.stats.formatDailyProgress(total, goal);
             } else if (period === 'week') {
                 const { daily, previous } = stats;
-                message += '\n📊 По дням:\n';
+
+                message += '\n📅 СТАТИСТИКА ПО ДНЯМ\n';
+                message += '━━━━━━━━━━━━━━━━\n';
                 daily.forEach((day) => {
                     if (day.total > 0) {
-                        message += `\n${day.date}:\n`;
-                        message += `💧 Вода: ${day.water}л\n`;
-                        message += `🥤 Другие: ${day.other}л\n`;
-                        message += `📈 Всего: ${day.total}л\n`;
-                        message += `${ValidationUtil.createRatioBar(day.water, day.other)}\n`;
+                        const date = new Date(day.date);
+                        const dayName = date.toLocaleDateString('ru-RU', {
+                            weekday: 'long',
+                            day: 'numeric',
+                        });
+                        message += `\n${dayName.charAt(0).toUpperCase() + dayName.slice(1)}\n`;
+                        message += `├ 💧 Вода: ${day.water}л\n`;
+                        message += `├ 🥤 Другое: ${day.other}л\n`;
+                        message += `└ 📈 Всего: ${day.total}л\n`;
+                        message += `   ${ValidationUtil.createRatioBar(day.water, day.other)}\n`;
                     }
                 });
 
-                message += '\n📈 Предыдущая неделя:\n';
-                message += `💧 Вода: ${previous.water}л\n`;
-                message += `🥤 Другие напитки: ${previous.other}л\n`;
-                message += `📈 Всего: ${previous.total}л\n`;
-                
+                message += '\n⏮ ПРЕДЫДУЩАЯ НЕДЕЛЯ\n';
+                message += '━━━━━━━━━━━━━━━━\n';
+                message += `├ 💧 Вода: ${previous.water}л\n`;
+                message += `├ 🥤 Другое: ${previous.other}л\n`;
+                message += `└ 📈 Всего: ${previous.total}л\n`;
+
                 if (Number(previous.total) > 0) {
-                    message += `${ValidationUtil.createRatioBar(Number(previous.water), Number(previous.other))}\n`;
+                    message += `   ${ValidationUtil.createRatioBar(Number(previous.water), Number(previous.other))}\n`;
                 }
             } else if (period === 'month') {
-                const { daily, weekly, previous } = stats;
-                
-                message += '\n📊 По неделям:\n';
+                const { weekly, previous } = stats;
+
+                message += '\n📅 СТАТИСТИКА ПО НЕДЕЛЯМ\n';
+                message += '━━━━━━━━━━━━━━━━\n';
                 weekly.forEach((week) => {
                     if (week.total > 0) {
-                        message += `\nНеделя ${week.week}:\n`;
-                        message += `💧 Вода: ${week.water}л\n`;
-                        message += `🥤 Другие: ${week.other}л\n`;
-                        message += `📈 Всего: ${week.total}л\n`;
-                        message += `${ValidationUtil.createRatioBar(Number(week.water), Number(week.other))}\n`;
+                        message += `\nНеделя ${week.week}\n`;
+                        message += `├ 💧 Вода: ${week.water}л\n`;
+                        message += `├ 🥤 Другое: ${week.other}л\n`;
+                        message += `└ 📈 Всего: ${week.total}л\n`;
+                        message += `   ${ValidationUtil.createRatioBar(Number(week.water), Number(week.other))}\n`;
                     }
                 });
 
-                message += '\n📈 Предыдущий месяц:\n';
-                message += `💧 Вода: ${previous.water}л\n`;
-                message += `🥤 Другие напитки: ${previous.other}л\n`;
-                message += `📈 Всего: ${previous.total}л\n`;
-                
+                message += '\n⏮ ПРЕДЫДУЩИЙ МЕСЯЦ\n';
+                message += '━━━━━━━━━━━━━━━━\n';
+                message += `├ 💧 Вода: ${previous.water}л\n`;
+                message += `├ 🥤 Другое: ${previous.other}л\n`;
+                message += `└ 📈 Всего: ${previous.total}л\n`;
+
                 if (Number(previous.total) > 0) {
-                    message += `${ValidationUtil.createRatioBar(Number(previous.water), Number(previous.other))}\n`;
+                    message += `   ${ValidationUtil.createRatioBar(Number(previous.water), Number(previous.other))}\n`;
                 }
             }
 
