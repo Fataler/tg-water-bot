@@ -117,9 +117,14 @@ class NotificationService {
         const goal = user.daily_goal;
 
         if (currentIntake < goal) {
+            const messages = MESSAGE.notifications.reminder.messages;
+            const randomMessage = messages[Math.floor(Math.random() * messages.length)];
+            const progressMessage = MESSAGE.stats.formatDailyProgress(currentIntake, goal);
+            const fullMessage = `${randomMessage}\n${progressMessage}`;
+
             await this.telegramService.sendMessage(
                 user.chat_id,
-                MESSAGE.notifications.reminder.format(currentIntake, goal),
+                fullMessage,
                 KeyboardUtil.getMainKeyboard()
             );
 
