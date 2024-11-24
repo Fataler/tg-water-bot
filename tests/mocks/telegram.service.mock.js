@@ -1,50 +1,46 @@
-const EventEmitter = require('events');
+const mockBot = {
+    sendMessage: jest.fn(),
+    editMessageText: jest.fn(),
+    deleteMessage: jest.fn(),
+    answerCallbackQuery: jest.fn(),
+    getMe: jest.fn().mockResolvedValue({ id: 123 }),
+    onText: jest.fn(),
+    on: jest.fn(),
+    close: jest.fn()
+};
 
-class MockTelegramBot extends EventEmitter {
+class TelegramServiceMock {
     constructor() {
-        super();
+        this.bot = mockBot;
     }
 
-    sendMessage() {
-        return Promise.resolve({ message_id: 1 });
+    async sendMessage(chatId, text, options = {}) {
+        return this.bot.sendMessage(chatId, text, options);
     }
 
-    on() {
-        return this;
+    async editMessage(chatId, messageId, text, options = {}) {
+        return this.bot.editMessageText(text, {
+            chat_id: chatId,
+            message_id: messageId,
+            ...options,
+        });
     }
 
-    onText() {
-        return this;
+    async deleteMessage(chatId, messageId) {
+        return this.bot.deleteMessage(chatId, messageId);
     }
 
-    editMessageText() {
-        return Promise.resolve();
+    onText(regex, callback) {
+        this.bot.onText(regex, callback);
     }
 
-    deleteMessage() {
-        return Promise.resolve();
+    onCallback(callback) {
+        this.bot.on('callback_query', callback);
     }
 
-    answerCallbackQuery() {
-        return Promise.resolve();
+    getBot() {
+        return this.bot;
     }
 }
 
-const bot = new MockTelegramBot();
-
-const sendMessageMock = jest.fn().mockImplementation((chatId, text, options = {}) => {
-    if (options.keyboard) {
-        options.reply_markup = { keyboard: options.keyboard };
-        delete options.keyboard;
-    }
-    return Promise.resolve({ message_id: 1 });
-});
-
-module.exports = {
-    getBot: () => bot,
-    sendMessage: sendMessageMock,
-    editMessage: jest.fn().mockResolvedValue(true),
-    deleteMessage: jest.fn().mockResolvedValue(true),
-    onText: jest.fn(),
-    on: jest.fn(),
-};
+module.exports = { TelegramServiceMock };

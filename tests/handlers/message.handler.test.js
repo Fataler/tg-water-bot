@@ -1,99 +1,213 @@
-const MessageHandler = require('../../src/handlers/message.handler');
-const telegramService = require('../../tests/mocks/telegram.service.mock');
-const dbService = require('../../src/services/database.service');
+const TelegramServiceMock = require('../mocks/telegram.service.mock');
+const DatabaseServiceMock = require('../mocks/database.service.mock');
+const KeyboardUtil = require('../../src/utils/keyboard.util');
 const ValidationUtil = require('../../src/utils/validation.util');
 const callbackHandler = require('../../src/handlers/callback.handler');
-const KeyboardUtil = require('../../src/utils/keyboard.util');
+const MESSAGE = require('../../src/config/message.config');
+const config = require('../../src/config/config');
 
-// Мокаем все зависимости
-jest.mock('../../src/services/telegram.service', () => require('../../tests/mocks/telegram.service.mock'));
-jest.mock('../../src/services/database.service');
-jest.mock('../../src/utils/keyboard.util');
-jest.mock('../../src/handlers/callback.handler');
+// Мокаем модули
+jest.mock('../../src/services/telegram.service', () => ({
+    sendMessage: jest.fn(),
+    editMessage: jest.fn(),
+    deleteMessage: jest.fn(),
+    getBot: jest.fn().mockReturnValue({
+        on: jest.fn()
+    })
+}));
+
+jest.mock('../../src/services/database.service', () => ({
+    getUser: jest.fn(),
+    addUser: jest.fn(),
+    updateUser: jest.fn(),
+    deleteUser: jest.fn(),
+    addWaterIntake: jest.fn(),
+    getDailyWaterIntake: jest.fn()
+}));
+
 jest.mock('../../src/utils/validation.util');
+jest.mock('../../src/handlers/callback.handler', () => ({
+    userTemp: new Map(),
+    handleDrinkIntake: jest.fn()
+}));
 
 describe('MessageHandler', () => {
+    let messageHandler;
+    let telegramService;
+    let dbService;
+    
+    const mockChatId = 123456789;
+    const mockMsg = {
+        chat: { id: mockChatId },
+        text: 'test message'
+    };
+
     beforeEach(() => {
         jest.clearAllMocks();
-        callbackHandler.userTemp = new Map();
         
-        // Настраиваем мок для KeyboardUtil.getMainKeyboard
-        KeyboardUtil.getMainKeyboard = jest.fn().mockReturnValue({ keyboard: [] });
+        // Получаем свежие инстансы сервисов
+        telegramService = require('../../src/services/telegram.service');
+        dbService = require('../../src/services/database.service');
+        
+        // Настраиваем базовые моки
+        telegramService.getBot = jest.fn().mockReturnValue({
+            on: jest.fn()
+        });
+        
+        // Очищаем временные данные пользователя
+        callbackHandler.userTemp.clear();
+        
+        // Получаем свежий инстанс хендлера
+        messageHandler = require('../../src/handlers/message.handler');
     });
 
     describe('handleMessage', () => {
-        it('should handle custom input when userTemp exists', async () => {
-            const chatId = 123456;
-            const text = '2.5';
-            const msg = { chat: { id: chatId }, text };
-            const userTemp = { waitingFor: 'custom_goal' };
+        it('should ignore /start command', async () => {
+            const startMsg = { ...mockMsg, text: '/start' };
             
-            callbackHandler.userTemp.set(chatId, userTemp);
+            await messageHandler.handleMessage(startMsg);
             
-            await MessageHandler.handleMessage(msg);
-            
-            expect(callbackHandler.userTemp.has(chatId)).toBeFalsy();
+            expect(dbService.getUser).not.toHaveBeenCalled();
+            expect(telegramService.sendMessage).not.toHaveBeenCalled();
         });
 
-        it('should not process custom input when userTemp does not exist', async () => {
-            const msg = { chat: { id: 123456 }, text: '2.5' };
+        it('should handle non-existing user', async () => {
+            dbService.getUser.mockResolvedValue(null);
             
-            await MessageHandler.handleMessage(msg);
+            await messageHandler.handleMessage(mockMsg);
+            
+            expect(telegramService.sendMessage).toHaveBeenCalledWith(
+                mockChatId,
+                MESSAGE.errors.userNotFound
+            );
+        });
+
+        it('should handle message for existing user without temp data', async () => {
+            const mockUser = { id: 1, chatId: mockChatId };
+            dbService.getUser.mockResolvedValue(mockUser);
+            
+            await messageHandler.handleMessage(mockMsg);
             
             expect(telegramService.sendMessage).not.toHaveBeenCalled();
-            expect(dbService.addUser).not.toHaveBeenCalled();
+        });
+
+        it('should handle error gracefully', async () => {
+            dbService.getUser.mockRejectedValue(new Error('DB Error'));
+            
+            await messageHandler.handleMessage(mockMsg);
+            
+            expect(telegramService.sendMessage).toHaveBeenCalledWith(
+                mockChatId,
+                MESSAGE.errors.general
+            );
         });
     });
 
     describe('handleCustomInput', () => {
+        beforeEach(() => {
+            ValidationUtil.sanitizeNumber.mockImplementation(text => parseFloat(text));
+        });
+
         it('should handle invalid number input', async () => {
-            const chatId = 123456;
-            const text = 'invalid';
-            const userTemp = { waitingFor: 'custom_goal' };
-
-            ValidationUtil.sanitizeNumber = jest.fn().mockReturnValue(null);
-
-            await MessageHandler.handleCustomInput(chatId, text, userTemp);
-
+            ValidationUtil.sanitizeNumber.mockReturnValue(null);
+            
+            await messageHandler.handleCustomInput(mockChatId, 'invalid', { waitingFor: 'custom_goal' });
+            
             expect(telegramService.sendMessage).toHaveBeenCalledWith(
-                chatId,
-                '⚠️ Укажи корректное число.',
-                { keyboard: [] }
+                mockChatId,
+                MESSAGE.errors.validation.invalidNumber,
+                KeyboardUtil.getMainKeyboard()
             );
+            expect(dbService.addUser).not.toHaveBeenCalled();
         });
 
-        it('should handle custom goal setting', async () => {
-            const chatId = 123456;
-            const text = '2.5';
+        describe('custom goal handling', () => {
+            const mockAmount = 2.5;
             const userTemp = { waitingFor: 'custom_goal' };
 
-            ValidationUtil.sanitizeNumber = jest.fn().mockReturnValue(2.5);
-            ValidationUtil.isValidGoal = jest.fn().mockReturnValue(true);
+            it('should handle valid goal amount', async () => {
+                ValidationUtil.isValidGoal.mockReturnValue(true);
+                
+                await messageHandler.handleCustomInput(mockChatId, mockAmount.toString(), userTemp);
+                
+                expect(dbService.addUser).toHaveBeenCalledWith(mockChatId, mockAmount);
+                expect(telegramService.sendMessage).toHaveBeenCalledWith(
+                    mockChatId,
+                    MESSAGE.success.goalSet,
+                    KeyboardUtil.getMainKeyboard()
+                );
+            });
 
-            await MessageHandler.handleCustomInput(chatId, text, userTemp);
-
-            expect(dbService.addUser).toHaveBeenCalledWith(chatId, 2.5);
-            expect(telegramService.sendMessage).toHaveBeenCalledWith(
-                chatId,
-                '🎯 Цель установлена! Можешь начинать отслеживать потребление воды.',
-                { keyboard: [] }
-            );
+            it('should handle invalid goal amount', async () => {
+                ValidationUtil.isValidGoal.mockReturnValue(false);
+                
+                await messageHandler.handleCustomInput(mockChatId, mockAmount.toString(), userTemp);
+                
+                expect(dbService.addUser).not.toHaveBeenCalled();
+                expect(telegramService.sendMessage).toHaveBeenCalledWith(
+                    mockChatId,
+                    MESSAGE.errors.validation.goal(
+                        config.validation.water.minAmount,
+                        config.validation.water.maxAmount * 2
+                    )
+                );
+            });
         });
 
-        it('should handle custom water intake', async () => {
-            const chatId = 123456;
-            const text = '0.5';
-            const userTemp = { waitingFor: 'custom_water' };
+        describe('custom drink handling', () => {
+            const mockAmount = 0.5;
 
-            ValidationUtil.sanitizeNumber = jest.fn().mockReturnValue(0.5);
-            ValidationUtil.isValidAmount = jest.fn().mockReturnValue(true);
+            it('should handle valid water amount', async () => {
+                const userTemp = { waitingFor: 'custom_water' };
+                ValidationUtil.isValidAmount.mockReturnValue(true);
+                
+                await messageHandler.handleCustomInput(mockChatId, mockAmount.toString(), userTemp);
+                
+                expect(callbackHandler.handleDrinkIntake).toHaveBeenCalledWith(
+                    mockChatId,
+                    mockAmount.toString(),
+                    'water'
+                );
+            });
 
-            await MessageHandler.handleCustomInput(chatId, text, userTemp);
+            it('should handle valid other drink amount', async () => {
+                const userTemp = { waitingFor: 'custom_other' };
+                ValidationUtil.isValidAmount.mockReturnValue(true);
+                
+                await messageHandler.handleCustomInput(mockChatId, mockAmount.toString(), userTemp);
+                
+                expect(callbackHandler.handleDrinkIntake).toHaveBeenCalledWith(
+                    mockChatId,
+                    mockAmount.toString(),
+                    'other'
+                );
+            });
 
-            expect(callbackHandler.handleDrinkIntake).toHaveBeenCalledWith(
-                chatId,
-                0.5,
-                'water'
+            it('should handle invalid drink amount', async () => {
+                const userTemp = { waitingFor: 'custom_water' };
+                ValidationUtil.isValidAmount.mockReturnValue(false);
+                
+                await messageHandler.handleCustomInput(mockChatId, mockAmount.toString(), userTemp);
+                
+                expect(callbackHandler.handleDrinkIntake).not.toHaveBeenCalled();
+                expect(telegramService.sendMessage).toHaveBeenCalledWith(
+                    mockChatId,
+                    MESSAGE.errors.validation.amount(
+                        config.validation.water.minAmount,
+                        config.validation.water.maxAmount
+                    )
+                );
+            });
+        });
+    });
+
+    describe('setupHandler', () => {
+        it('should set up message handler', () => {
+            messageHandler.setupHandler();
+            
+            expect(telegramService.getBot().on).toHaveBeenCalledWith(
+                'message',
+                expect.any(Function)
             );
         });
     });

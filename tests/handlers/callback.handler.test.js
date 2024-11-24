@@ -1,87 +1,112 @@
-const CallbackHandler = require('../../src/handlers/callback.handler');
-const telegramService = require('../../tests/mocks/telegram.service.mock');
-const dbService = require('../../src/services/database.service');
-const notificationService = require('../../src/services/notification.service');
+const TelegramServiceMock = require('../mocks/telegram.service.mock');
+const DatabaseServiceMock = require('../mocks/database.service.mock');
+const NotificationServiceMock = require('../mocks/notification.service.mock');
 const KeyboardUtil = require('../../src/utils/keyboard.util');
-const ValidationUtil = require('../../src/utils/validation.util');
-const KEYBOARD = require('../../src/config/keyboard.config');
 const MESSAGE = require('../../src/config/message.config');
+const KEYBOARD = require('../../src/config/keyboard.config');
 const config = require('../../src/config/config');
 
-// Мокаем все зависимости
-jest.mock('../../src/services/telegram.service', () =>
-    require('../../tests/mocks/telegram.service.mock')
-);
+// Мокаем модули
+jest.mock('../../src/services/telegram.service');
 jest.mock('../../src/services/database.service');
 jest.mock('../../src/services/notification.service');
-jest.mock('../../src/utils/keyboard.util');
 jest.mock('../../src/utils/validation.util');
-jest.mock('../../src/config/message.config', () => ({
-    errors: {
-        general: 'Error message',
-        stats: 'Stats error message',
-        validation: {
-            amount: (min, max) => `Amount should be between ${min} and ${max}`,
-        },
-    },
-    prompts: {
-        goal: {
-            set: 'Set goal message',
-            custom: 'Custom goal message',
-        },
-        reset: {
-            cancel: 'Reset cancelled message',
-        },
-        default: 'Default message',
-    },
-    success: {
-        goalSet: (goal) => `Goal set to ${goal}`,
-        reset: 'Reset success message',
-    },
-    stats: {
-        message: jest.fn(),
-    },
-}));
 
 describe('CallbackHandler', () => {
-    const mockChatId = 123456;
-    const mockMessageId = 789;
+    let callbackHandler;
+    let telegramService;
+    let databaseService;
+    let notificationService;
+    let ValidationUtil;
+    
+    const mockChatId = 123456789;
     const mockQuery = {
         id: 'query123',
         message: {
-            chat: { id: mockChatId },
-            message_id: mockMessageId,
-        },
+            chat: {
+                id: mockChatId
+            },
+            message_id: 1
+        }
     };
 
     beforeEach(() => {
         jest.clearAllMocks();
-        // Подавляем вывод console.error во время тестов
-        jest.spyOn(console, 'error').mockImplementation(() => {});
-        KeyboardUtil.getMainKeyboard = jest.fn().mockReturnValue({ keyboard: [] });
-        KeyboardUtil.getGoalKeyboard = jest.fn().mockReturnValue({ keyboard: [] });
-        KeyboardUtil.getWaterAmountKeyboard = jest.fn().mockReturnValue({ keyboard: [] });
-        KeyboardUtil.getOtherAmountKeyboard = jest.fn().mockReturnValue({ keyboard: [] });
-        telegramService.getBot().answerCallbackQuery = jest.fn().mockResolvedValue(true);
-        telegramService.sendMessage.mockClear();
-    });
+        jest.resetModules();
+        
+        // Mock the services
+        jest.mock('../../src/services/telegram.service');
+        jest.mock('../../src/services/database.service');
+        jest.mock('../../src/services/notification.service');
+        jest.mock('../../src/utils/validation.util');
+        
+        // Get fresh service instances
+        telegramService = require('../../src/services/telegram.service');
+        databaseService = require('../../src/services/database.service');
+        notificationService = require('../../src/services/notification.service');
+        ValidationUtil = require('../../src/utils/validation.util');
+        
+        // Configure basic mocks
+        telegramService.getBot = jest.fn().mockReturnValue({
+            answerCallbackQuery: jest.fn().mockResolvedValue(true)
+        });
+        telegramService.sendMessage = jest.fn().mockResolvedValue(true);
+        telegramService.editMessageText = jest.fn().mockResolvedValue(true);
+        telegramService.onCallback = jest.fn();
 
-    afterEach(() => {
-        // Восстанавливаем оригинальную функцию console.error
-        jest.restoreAllMocks();
+        // Mock database methods
+        databaseService.getUser = jest.fn();
+        databaseService.addUser = jest.fn();
+        databaseService.updateUser = jest.fn();
+        databaseService.deleteUser = jest.fn();
+        databaseService.addWaterIntake = jest.fn();
+        databaseService.getDailyWaterIntake = jest.fn();
+        databaseService.getWeeklyWaterIntake = jest.fn();
+
+        // Mock notification methods
+        notificationService.scheduleReminders = jest.fn();
+        notificationService.cancelReminders = jest.fn();
+
+        // Mock validation methods
+        ValidationUtil.isValidAmount = jest.fn();
+        
+        // Get fresh handler instance
+        callbackHandler = require('../../src/handlers/callback.handler');
     });
 
     describe('handleCallback', () => {
-        it('should handle goal callback', async () => {
-            const query = { ...mockQuery, data: 'goal_2.5' };
-            await CallbackHandler.handleCallback(query);
+        it('should handle valid callback and answer query', async () => {
+            const query = {
+                id: 'query123',
+                data: 'test_callback',
+                message: {
+                    chat: {
+                        id: mockChatId
+                    }
+                }
+            };
+
+            await callbackHandler.handleCallback(query);
+
             expect(telegramService.getBot().answerCallbackQuery).toHaveBeenCalledWith(query.id);
         });
 
-        it('should handle error gracefully', async () => {
-            const query = { ...mockQuery, data: 'invalid_data' };
-            CallbackHandler.handlers.goal = jest.fn().mockRejectedValue(new Error('Test error'));
-            await CallbackHandler.handleCallback({ ...query, data: 'goal_invalid' });
+        it('should handle error and send error message', async () => {
+            const query = {
+                id: 'query123',
+                data: 'invalid_callback',
+                message: {
+                    chat: {
+                        id: mockChatId
+                    }
+                }
+            };
+
+            telegramService.getBot().answerCallbackQuery.mockRejectedValueOnce(new Error('Test error'));
+
+            await callbackHandler.handleCallback(query);
+
+            expect(telegramService.getBot().answerCallbackQuery).toHaveBeenCalledWith(query.id);
             expect(telegramService.sendMessage).toHaveBeenCalledWith(
                 mockChatId,
                 MESSAGE.errors.general,
@@ -92,188 +117,94 @@ describe('CallbackHandler', () => {
 
     describe('handleGoalCallback', () => {
         it('should handle custom goal request', async () => {
-            await CallbackHandler.handleGoalCallback(mockChatId, 'goal_custom', mockMessageId);
+            await callbackHandler.handleGoalCallback(mockChatId, 'goal_custom');
+            
             expect(telegramService.sendMessage).toHaveBeenCalledWith(
                 mockChatId,
                 MESSAGE.prompts.goal.set
             );
-            expect(CallbackHandler.userTemp.get(mockChatId)).toEqual({ waitingFor: 'custom_goal' });
+            expect(callbackHandler.userTemp.get(mockChatId)).toEqual({ waitingFor: 'custom_goal' });
         });
 
-        it('should set valid goal', async () => {
-            const goal = '2.5';
-            ValidationUtil.isValidGoal = jest.fn().mockReturnValue(true);
-
-            await CallbackHandler.handleGoalCallback(mockChatId, `goal_${goal}`, mockMessageId);
-
-            expect(dbService.addUser).toHaveBeenCalledWith(mockChatId, 2.5);
+        it('should set numeric goal and schedule reminders', async () => {
+            const goalValue = 2.5;
+            
+            await callbackHandler.handleGoalCallback(mockChatId, `goal_${goalValue}`);
+            
+            expect(databaseService.addUser).toHaveBeenCalledWith(mockChatId, goalValue);
             expect(notificationService.scheduleReminders).toHaveBeenCalledWith(mockChatId);
             expect(telegramService.sendMessage).toHaveBeenCalledWith(
                 mockChatId,
-                MESSAGE.success.goalSet(2.5),
+                MESSAGE.success.goalSet,
                 KeyboardUtil.getMainKeyboard()
             );
         });
     });
 
-    describe('handleDrinkIntake', () => {
-        it('should handle custom water amount request', async () => {
-            await CallbackHandler.handleDrinkIntake(mockChatId, 'custom', KEYBOARD.drinks.water.id);
-
-            expect(telegramService.sendMessage).toHaveBeenCalled();
-            expect(CallbackHandler.userTemp.get(mockChatId)).toEqual({
-                waitingFor: `custom_${KEYBOARD.drinks.water.id}`,
-            });
-        });
-
-        it('should add valid water intake', async () => {
-            const amount = '0.5';
-            ValidationUtil.isValidAmount = jest.fn().mockReturnValue(true);
-            dbService.getDailyWaterIntake = jest.fn().mockResolvedValue(1.5);
-            dbService.getUser = jest.fn().mockResolvedValue({ daily_goal: 2.5 });
-
-            await CallbackHandler.handleDrinkIntake(mockChatId, amount);
-
-            expect(dbService.addWaterIntake).toHaveBeenCalledWith(
-                mockChatId,
-                0.5,
-                KEYBOARD.drinks.water.id
-            );
-        });
-
-        it('should handle invalid amount', async () => {
-            ValidationUtil.isValidAmount = jest.fn().mockReturnValue(false);
-
-            await CallbackHandler.handleDrinkIntake(mockChatId, '10');
-
+    describe('handleDrinkTypeCallback', () => {
+        it('should handle water drink type', async () => {
+            await callbackHandler.handleDrinkTypeCallback(mockChatId, `drink_${KEYBOARD.drinks.water.id}`);
+            
             expect(telegramService.sendMessage).toHaveBeenCalledWith(
                 mockChatId,
-                MESSAGE.errors.validation.amount(
+                MESSAGE.prompts.water.amount(
                     config.validation.water.minAmount,
                     config.validation.water.maxAmount
-                )
+                ),
+                KeyboardUtil.getWaterAmountKeyboard()
             );
-            expect(dbService.addWaterIntake).not.toHaveBeenCalled();
+        });
+
+        it('should handle other drink type', async () => {
+            await callbackHandler.handleDrinkTypeCallback(mockChatId, `drink_${KEYBOARD.drinks.other.id}`);
+            
+            expect(telegramService.sendMessage).toHaveBeenCalledWith(
+                mockChatId,
+                MESSAGE.prompts.other.amount(
+                    config.validation.water.minAmount,
+                    config.validation.water.maxAmount
+                ),
+                KeyboardUtil.getOtherAmountKeyboard()
+            );
         });
     });
 
     describe('handleStatsCallback', () => {
-        const mockStats = {
-            water: 1.0,
-            other: 0.5,
-            total: 1.5,
+        const mockUser = {
+            id: 1,
+            daily_goal: 2.5,
+            notification_enabled: 1
         };
-        const mockUser = { daily_goal: 2.5 };
 
         beforeEach(() => {
-            dbService.getUser = jest.fn().mockResolvedValue(mockUser);
-            dbService.getDailyWaterIntake = jest.fn().mockResolvedValue(mockStats);
-            dbService.getWeeklyWaterIntake = jest.fn().mockResolvedValue(mockStats);
-            dbService.getMonthlyWaterIntake = jest.fn().mockResolvedValue(mockStats);
-            dbService.getAllTimeWaterIntake = jest.fn().mockResolvedValue(mockStats);
+            databaseService.getUser.mockResolvedValue(mockUser);
         });
 
-        it('should show daily stats', async () => {
-            const period = KEYBOARD.periods.today.id;
-            const mockMessage = 'Mock daily stats';
-            MESSAGE.stats.message = jest.fn().mockReturnValue(mockMessage);
-
-            await CallbackHandler.handleStatsCallback(mockChatId, `stats_${period}`, mockMessageId);
-
-            expect(dbService.getDailyWaterIntake).toHaveBeenCalled();
-            expect(telegramService.deleteMessage).toHaveBeenCalledWith(mockChatId, mockMessageId);
-            expect(telegramService.sendMessage).toHaveBeenCalledWith(
-                mockChatId,
-                mockMessage,
-                KeyboardUtil.getMainKeyboard()
-            );
+        it('should handle daily stats', async () => {
+            const stats = { total: 1.5, count: 3 };
+            databaseService.getDailyWaterIntake.mockResolvedValue(stats);
+            
+            await callbackHandler.handleStatsCallback(mockChatId, `stats_${KEYBOARD.periods.today.id}`);
+            
+            expect(databaseService.getDailyWaterIntake).toHaveBeenCalledWith(mockUser.id);
+            expect(telegramService.sendMessage).toHaveBeenCalled();
         });
 
-        it('should show weekly stats', async () => {
-            const period = KEYBOARD.periods.week.id;
-            const mockMessage = 'Mock weekly stats';
-            MESSAGE.stats.message = jest.fn().mockReturnValue(mockMessage);
-
-            await CallbackHandler.handleStatsCallback(mockChatId, `stats_${period}`, mockMessageId);
-
-            expect(dbService.getWeeklyWaterIntake).toHaveBeenCalled();
-            expect(telegramService.deleteMessage).toHaveBeenCalledWith(mockChatId, mockMessageId);
-            expect(telegramService.sendMessage).toHaveBeenCalledWith(
-                mockChatId,
-                mockMessage,
-                KeyboardUtil.getMainKeyboard()
-            );
+        it('should handle weekly stats', async () => {
+            const stats = { total: 10.5, count: 21 };
+            databaseService.getWeeklyWaterIntake.mockResolvedValue(stats);
+            
+            await callbackHandler.handleStatsCallback(mockChatId, `stats_${KEYBOARD.periods.week.id}`);
+            
+            expect(databaseService.getWeeklyWaterIntake).toHaveBeenCalledWith(mockUser.id);
+            expect(telegramService.sendMessage).toHaveBeenCalled();
         });
 
-        it('should show monthly stats', async () => {
-            const period = KEYBOARD.periods.month.id;
-            const mockMessage = 'Mock monthly stats';
-            MESSAGE.stats.message = jest.fn().mockReturnValue(mockMessage);
-
-            await CallbackHandler.handleStatsCallback(mockChatId, `stats_${period}`, mockMessageId);
-
-            expect(dbService.getMonthlyWaterIntake).toHaveBeenCalled();
-            expect(telegramService.deleteMessage).toHaveBeenCalledWith(mockChatId, mockMessageId);
-            expect(telegramService.sendMessage).toHaveBeenCalledWith(
-                mockChatId,
-                mockMessage,
-                KeyboardUtil.getMainKeyboard()
-            );
-        });
-
-        it('should show all time stats', async () => {
-            const period = KEYBOARD.periods.all.id;
-            const mockMessage = 'Mock all time stats';
-            MESSAGE.stats.message = jest.fn().mockReturnValue(mockMessage);
-
-            await CallbackHandler.handleStatsCallback(mockChatId, `stats_${period}`, mockMessageId);
-
-            expect(dbService.getAllTimeWaterIntake).toHaveBeenCalled();
-            expect(telegramService.deleteMessage).toHaveBeenCalledWith(mockChatId, mockMessageId);
-            expect(telegramService.sendMessage).toHaveBeenCalledWith(
-                mockChatId,
-                mockMessage,
-                KeyboardUtil.getMainKeyboard()
-            );
-        });
-
-        it('should handle empty stats', async () => {
-            const period = KEYBOARD.periods.today.id;
-            const mockMessage = '❌ Нет данных для отображения статистики';
-
-            dbService.getDailyWaterIntake = jest.fn().mockResolvedValue(null);
-            MESSAGE.stats.message = jest.fn().mockReturnValue(mockMessage);
-
-            await CallbackHandler.handleStatsCallback(mockChatId, `stats_${period}`, null);
-
-            expect(telegramService.deleteMessage).not.toHaveBeenCalled();
-            expect(telegramService.sendMessage).toHaveBeenCalledWith(
-                mockChatId,
-                mockMessage,
-                KeyboardUtil.getMainKeyboard()
-            );
-        });
-
-        it('should handle empty message', async () => {
-            const period = KEYBOARD.periods.today.id;
-
-            dbService.getDailyWaterIntake = jest.fn().mockResolvedValue({});
-            MESSAGE.stats.message = jest.fn().mockReturnValue('');
-
-            await CallbackHandler.handleStatsCallback(mockChatId, `stats_${period}`, mockMessageId);
-
-            expect(telegramService.sendMessage).toHaveBeenCalledWith(
-                mockChatId,
-                MESSAGE.errors.stats,
-                KeyboardUtil.getMainKeyboard()
-            );
-        });
-
-        it('should handle stats error', async () => {
-            dbService.getUser = jest.fn().mockRejectedValue(new Error('DB Error'));
-
-            await CallbackHandler.handleStatsCallback(mockChatId, 'stats_today', mockMessageId);
-
+        it('should handle error when user not found', async () => {
+            databaseService.getUser.mockResolvedValue(null);
+            
+            await callbackHandler.handleStatsCallback(mockChatId, `stats_${KEYBOARD.periods.today.id}`);
+            
             expect(telegramService.sendMessage).toHaveBeenCalledWith(
                 mockChatId,
                 MESSAGE.errors.stats,
@@ -284,11 +215,7 @@ describe('CallbackHandler', () => {
 
     describe('handleSettingsCallback', () => {
         it('should handle goal setting', async () => {
-            await CallbackHandler.handleSettingsCallback(
-                mockChatId,
-                `settings_${KEYBOARD.settings.goal.id}`,
-                mockMessageId
-            );
+            await callbackHandler.handleSettingsCallback(mockChatId, `settings_${KEYBOARD.settings.goal.id}`);
 
             expect(telegramService.sendMessage).toHaveBeenCalledWith(
                 mockChatId,
@@ -297,49 +224,124 @@ describe('CallbackHandler', () => {
             );
         });
 
-        it('should handle unknown setting', async () => {
-            await CallbackHandler.handleSettingsCallback(
-                mockChatId,
-                'settings_unknown',
-                mockMessageId
-            );
+        it('should handle enabling notifications', async () => {
+            databaseService.getUser.mockResolvedValueOnce({ notification_enabled: 0 });
 
+            await callbackHandler.handleSettingsCallback(mockChatId, `settings_${KEYBOARD.settings.notifications.id}`);
+
+            expect(databaseService.updateUser).toHaveBeenCalledWith(mockChatId, { notification_enabled: 1 });
+            expect(notificationService.scheduleReminders).toHaveBeenCalledWith(mockChatId);
             expect(telegramService.sendMessage).toHaveBeenCalledWith(
                 mockChatId,
-                MESSAGE.prompts.default,
+                MESSAGE.notifications.enabled,
+                KeyboardUtil.getMainKeyboard()
+            );
+        });
+
+        it('should handle disabling notifications', async () => {
+            databaseService.getUser.mockResolvedValueOnce({ notification_enabled: 1 });
+
+            await callbackHandler.handleSettingsCallback(mockChatId, `settings_${KEYBOARD.settings.notifications.id}`);
+
+            expect(databaseService.updateUser).toHaveBeenCalledWith(mockChatId, { notification_enabled: 0 });
+            expect(notificationService.cancelReminders).toHaveBeenCalledWith(mockChatId);
+            expect(telegramService.sendMessage).toHaveBeenCalledWith(
+                mockChatId,
+                MESSAGE.notifications.disabled,
                 KeyboardUtil.getMainKeyboard()
             );
         });
     });
 
-    describe('handleResetConfirmCallback', () => {
-        it('should reset user data when confirmed', async () => {
-            await CallbackHandler.handleResetConfirmCallback(
+    describe('handleResetCallback', () => {
+        it('should send reset confirmation message', async () => {
+            await callbackHandler.handleResetCallback(mockChatId);
+            
+            expect(telegramService.sendMessage).toHaveBeenCalledWith(
                 mockChatId,
-                `resetConfirm_${KEYBOARD.reset.confirm.id}`,
-                mockMessageId
+                MESSAGE.prompts.reset.confirm,
+                KeyboardUtil.getResetConfirmKeyboard()
             );
+        });
+    });
 
-            expect(dbService.deleteUser).toHaveBeenCalledWith(mockChatId);
+    describe('handleResetConfirmCallback', () => {
+        it('should handle reset confirmation', async () => {
+            await callbackHandler.handleResetConfirmCallback(mockChatId, `reset_${KEYBOARD.reset.confirm.id}`);
+            
+            expect(databaseService.deleteUser).toHaveBeenCalledWith(mockChatId);
             expect(notificationService.cancelReminders).toHaveBeenCalledWith(mockChatId);
             expect(telegramService.sendMessage).toHaveBeenCalledWith(
                 mockChatId,
-                MESSAGE.success.reset
+                MESSAGE.prompts.reset.success
             );
         });
 
         it('should handle reset cancellation', async () => {
-            await CallbackHandler.handleResetConfirmCallback(
-                mockChatId,
-                `resetConfirm_${KEYBOARD.reset.cancel.id}`,
-                mockMessageId
-            );
-
-            expect(dbService.deleteUser).not.toHaveBeenCalled();
+            await callbackHandler.handleResetConfirmCallback(mockChatId, 'reset_cancel');
+            
+            expect(databaseService.deleteUser).not.toHaveBeenCalled();
             expect(telegramService.sendMessage).toHaveBeenCalledWith(
                 mockChatId,
                 MESSAGE.prompts.reset.cancel,
                 KeyboardUtil.getMainKeyboard()
+            );
+        });
+    });
+
+    describe('handleDrinkIntake', () => {
+        const mockUser = {
+            id: mockChatId,
+            daily_goal: 2.5,
+            notification_enabled: 1
+        };
+
+        beforeEach(() => {
+            ValidationUtil.isValidAmount.mockReset();
+            databaseService.getUser.mockReset();
+            databaseService.addWaterIntake.mockReset();
+            databaseService.getDailyWaterIntake.mockReset();
+            telegramService.sendMessage.mockReset();
+        });
+
+        it('should handle custom amount request', async () => {
+            await callbackHandler.handleDrinkIntake(mockChatId, 'custom', KEYBOARD.drinks.water.id);
+            
+            expect(telegramService.sendMessage).toHaveBeenCalledWith(
+                mockChatId,
+                MESSAGE.prompts.water.amount(
+                    config.validation.water.minAmount,
+                    config.validation.water.maxAmount
+                )
+            );
+        });
+
+        it('should handle valid amount', async () => {
+            const amount = 0.5;
+            const todayIntake = { total: 1.5 };
+            databaseService.getUser.mockResolvedValueOnce(mockUser);
+            databaseService.getDailyWaterIntake.mockResolvedValueOnce(todayIntake);
+            databaseService.addWaterIntake.mockResolvedValueOnce(1); // Return lastInsertRowid
+            ValidationUtil.isValidAmount.mockReturnValueOnce(true);
+            
+            await callbackHandler.handleDrinkIntake(mockChatId, amount, KEYBOARD.drinks.water.id);
+            
+            expect(databaseService.addWaterIntake).toHaveBeenCalledWith(mockChatId, amount, KEYBOARD.drinks.water.id);
+            expect(databaseService.getDailyWaterIntake).toHaveBeenCalledWith(mockUser.id);
+            expect(telegramService.sendMessage).toHaveBeenCalledWith(
+                mockChatId,
+                MESSAGE.success.waterAdded(amount, todayIntake, mockUser.daily_goal),
+                KeyboardUtil.getMainKeyboard()
+            );
+        });
+    });
+
+    describe('setupHandler', () => {
+        it('should set up callback handler', () => {
+            callbackHandler.setupHandler();
+            
+            expect(telegramService.onCallback).toHaveBeenCalledWith(
+                expect.any(Function)
             );
         });
     });

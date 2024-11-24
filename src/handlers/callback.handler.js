@@ -250,6 +250,11 @@ class CallbackHandler {
                 return;
             }
 
+            const user = await databaseService.getUser(chatId);
+            if (!user) {
+                throw new Error('User not found');
+            }
+
             const intakeAmount = parseFloat(amount);
             if (!ValidationUtil.isValidAmount(intakeAmount)) {
                 await telegramService.sendMessage(
@@ -260,11 +265,6 @@ class CallbackHandler {
                     )
                 );
                 return;
-            }
-
-            const user = await databaseService.getUser(chatId);
-            if (!user) {
-                throw new Error('User not found');
             }
 
             await databaseService.addWaterIntake(user.id, intakeAmount, type);
