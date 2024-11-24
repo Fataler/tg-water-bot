@@ -122,11 +122,10 @@ class NotificationService {
             const progressMessage = MESSAGE.stats.formatDailyProgress(currentIntake, goal);
             const fullMessage = `${randomMessage}\n${progressMessage}`;
 
-            await this.telegramService.sendMessage(
-                user.chat_id,
-                fullMessage,
-                KeyboardUtil.getMainKeyboard()
-            );
+            await this.telegramService.sendMessage(user.chat_id, fullMessage, {
+                ...KeyboardUtil.getMainKeyboard(),
+                disable_notification: false,
+            });
 
             await this.dbService.updateUser(user.chat_id, {
                 last_notification: Math.floor(Date.now() / 1000),
@@ -168,36 +167,6 @@ class NotificationService {
         // Store all jobs for this user
         this.jobs.set(user.chat_id, jobs);
         this.logger.info(`Scheduled ${jobs.length} reminders for user ${user.chat_id}`);
-    }
-
-    getProgressBar(percentage) {
-        const filledCount = Math.floor(percentage / 10);
-        const emptyCount = 10 - filledCount;
-        return '🟦'.repeat(filledCount) + '⬜️'.repeat(emptyCount);
-    }
-
-    async toggleNotifications(chatId, messageId) {
-        try {
-            const user = await dbService.getUser(chatId);
-            const notificationsEnabled = !user.notification_enabled;
-            await dbService.updateUser(chatId, { notification_enabled: notificationsEnabled });
-
-            const message = notificationsEnabled
-                ? MESSAGE.notifications.enabled
-                : MESSAGE.notifications.disabled;
-            const keyboard = KeyboardUtil.getMainKeyboard(notificationsEnabled);
-
-            await telegramService.editMessage(chatId, messageId, message, keyboard);
-
-            if (notificationsEnabled) {
-                await this.scheduleReminders(chatId);
-            } else {
-                await this.cancelReminders(chatId);
-            }
-        } catch (error) {
-            logger.error('Error toggling notifications:', error);
-            throw error;
-        }
     }
 }
 

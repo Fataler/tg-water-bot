@@ -5,6 +5,7 @@ const ValidationUtil = require('../utils/validation.util');
 const callbackHandler = require('./callback.handler');
 const config = require('../config/config');
 const MESSAGE = require('../config/message.config');
+const KEYBOARD = require('../config/keyboard.config');
 
 class MessageHandler {
     async handleMessage(msg) {
@@ -25,8 +26,16 @@ class MessageHandler {
 
             const userTemp = callbackHandler.userTemp.get(chatId);
             if (userTemp) {
+                if (text === KEYBOARD.main.cancel.text) {
+                    callbackHandler.userTemp.delete(chatId);
+                    await telegramService.sendMessage(
+                        chatId,
+                        MESSAGE.success.operationCancelled,
+                        KeyboardUtil.getMainKeyboard()
+                    );
+                    return;
+                }
                 await this.handleCustomInput(chatId, text, userTemp);
-                callbackHandler.userTemp.delete(chatId);
                 return;
             }
         } catch (error) {
@@ -42,7 +51,7 @@ class MessageHandler {
             await telegramService.sendMessage(
                 chatId,
                 MESSAGE.errors.validation.invalidNumber,
-                KeyboardUtil.getMainKeyboard()
+                KeyboardUtil.getCancelKeyboard()
             );
             return;
         }
@@ -56,13 +65,15 @@ class MessageHandler {
                         MESSAGE.success.goalSet,
                         KeyboardUtil.getMainKeyboard()
                     );
+                    callbackHandler.userTemp.delete(chatId);
                 } else {
                     await telegramService.sendMessage(
                         chatId,
                         MESSAGE.errors.validation.goal(
                             config.validation.water.minAmount,
                             config.validation.water.maxAmount * 2
-                        )
+                        ),
+                        KeyboardUtil.getCancelKeyboard()
                     );
                 }
                 break;
@@ -72,13 +83,15 @@ class MessageHandler {
                 if (ValidationUtil.isValidAmount(amount)) {
                     const drinkType = userTemp.waitingFor === 'custom_water' ? 'water' : 'other';
                     await callbackHandler.handleDrinkIntake(chatId, amount.toString(), drinkType);
+                    callbackHandler.userTemp.delete(chatId);
                 } else {
                     await telegramService.sendMessage(
                         chatId,
                         MESSAGE.errors.validation.amount(
                             config.validation.water.minAmount,
                             config.validation.water.maxAmount
-                        )
+                        ),
+                        KeyboardUtil.getCancelKeyboard()
                     );
                 }
                 break;

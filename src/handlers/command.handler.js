@@ -5,6 +5,7 @@ const KeyboardUtil = require('../utils/keyboard.util');
 const config = require('../config/config');
 const logger = require('../config/logger.config');
 const MESSAGE = require('../config/message.config');
+const callbackHandler = require('./callback.handler');
 
 class CommandHandler {
     async handleStart(msg) {
@@ -43,7 +44,7 @@ class CommandHandler {
         await telegramService.sendMessage(
             chatId,
             MESSAGE.prompts.reset.confirm,
-            KeyboardUtil.getResetConfirmKeyboard
+            KeyboardUtil.getResetConfirmKeyboard()
         );
     }
 
@@ -67,22 +68,14 @@ class CommandHandler {
 
     async handleSettings(msg) {
         const chatId = msg.chat.id;
+
         const user = await dbService.getUser(chatId);
         if (user) {
             try {
-                // First send the message with initial keyboard
-                const message = await telegramService.sendMessage(
+                await telegramService.sendMessage(
                     chatId,
                     MESSAGE.commands.settings,
-                    KeyboardUtil.getSettingsKeyboard(user, null)
-                );
-
-                // Then update it with the message ID in the keyboard
-                await telegramService.editMessage(
-                    chatId,
-                    message.message_id,
-                    MESSAGE.commands.settings,
-                    KeyboardUtil.getSettingsKeyboard(user, message.message_id)
+                    KeyboardUtil.getSettingsKeyboard(user)
                 );
             } catch (error) {
                 logger.error('Error handling settings:', error);
@@ -92,6 +85,8 @@ class CommandHandler {
                     KeyboardUtil.getMainKeyboard()
                 );
             }
+        } else {
+            await telegramService.sendMessage(chatId, MESSAGE.errors.userNotFound);
         }
     }
 
@@ -133,13 +128,14 @@ class CommandHandler {
     }
 
     setupHandlers() {
-        telegramService.onText(/\/start/, this.handleStart);
-        telegramService.onText(/\/reset/, this.handleReset);
-        telegramService.onText(/💧 Добавить воду/, this.handleAddWater);
-        telegramService.onText(/📊 Статистика/, this.handleStats);
-        telegramService.onText(/⚙️ Настройки/, this.handleSettings);
-        telegramService.onText(/\/help/, this.handleHelp);
-        telegramService.onText(/\/debug/, this.handleDebug);
+        const bot = telegramService.getBot();
+        bot.onText(/\/start/, (msg) => this.handleStart(msg));
+        bot.onText(/\/reset/, (msg) => this.handleReset(msg));
+        bot.onText(/💧 Добавить воду/, (msg) => this.handleAddWater(msg));
+        bot.onText(/📊 Статистика/, (msg) => this.handleStats(msg));
+        bot.onText(/⚙️ Настройки/, (msg) => this.handleSettings(msg));
+        bot.onText(/\/help/, (msg) => this.handleHelp(msg));
+        bot.onText(/\/debug/, (msg) => this.handleDebug(msg));
     }
 }
 

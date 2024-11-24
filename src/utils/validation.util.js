@@ -32,7 +32,10 @@ class ValidationUtil {
     static sanitizeNumber(input) {
         const normalizedInput = String(input).replace(',', '.');
         const num = parseFloat(normalizedInput);
-        return isNaN(num) ? null : Math.max(0, Math.min(num, config.validation.water.maxAmount));
+        if (isNaN(num) || num < config.validation.water.minAmount || num > config.validation.water.maxAmount) {
+            return null;
+        }
+        return num;
     }
 
     static formatWaterAmount(amount) {

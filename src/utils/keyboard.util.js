@@ -13,18 +13,18 @@ class KeyboardUtil {
         };
     }
 
-    static getDrinkTypeKeyboard(message_id) {
+    static getDrinkTypeKeyboard() {
         return {
             reply_markup: {
                 inline_keyboard: [
                     [
                         {
                             text: KEYBOARD.drinks.water.text,
-                            callback_data: `drink_${KEYBOARD.drinks.water.id}_${message_id}`,
+                            callback_data: `drink_${KEYBOARD.drinks.water.id}`,
                         },
                         {
                             text: KEYBOARD.drinks.other.text,
-                            callback_data: `drink_${KEYBOARD.drinks.other.id}_${message_id}`,
+                            callback_data: `drink_${KEYBOARD.drinks.other.id}`,
                         },
                     ],
                 ],
@@ -61,7 +61,7 @@ class KeyboardUtil {
         };
     }
 
-    static getCustomAmountKeyboard(type, message_id) {
+    static getCustomAmountKeyboard(type) {
         const amountEntries = Object.entries(KEYBOARD.amounts)
             .filter(([key]) => key !== 'custom')
             .sort((a, b) => parseFloat(a[0]) - parseFloat(b[0]));
@@ -77,13 +77,13 @@ class KeyboardUtil {
                     ...amounts.map((row) =>
                         row.map(([amount, config]) => ({
                             text: config.text,
-                            callback_data: `${type}_${amount}_${message_id}`,
+                            callback_data: `${type}_${amount}`,
                         }))
                     ),
                     [
                         {
                             text: KEYBOARD.amounts.custom.text,
-                            callback_data: `${type}_custom_${message_id}`,
+                            callback_data: `${type}_custom`,
                         },
                     ],
                 ],
@@ -91,15 +91,15 @@ class KeyboardUtil {
         };
     }
 
-    static getWaterAmountKeyboard(message_id) {
-        return this.getCustomAmountKeyboard(KEYBOARD.drinks.water.id, message_id);
+    static getWaterAmountKeyboard() {
+        return this.getCustomAmountKeyboard(KEYBOARD.drinks.water.id);
     }
 
-    static getOtherAmountKeyboard(message_id) {
-        return this.getCustomAmountKeyboard(KEYBOARD.drinks.other.id, message_id);
+    static getOtherAmountKeyboard() {
+        return this.getCustomAmountKeyboard(KEYBOARD.drinks.other.id);
     }
 
-    static getStatsKeyboard(message_id) {
+    static getStatsKeyboard() {
         const periods = [
             [
                 {
@@ -128,7 +128,7 @@ class KeyboardUtil {
                 inline_keyboard: periods.map((row) =>
                     row.map((item) => ({
                         text: item.text,
-                        callback_data: `stats_${item.period}_${message_id}`,
+                        callback_data: `stats_${item.period}`,
                     }))
                 ),
             },
@@ -168,6 +168,25 @@ class KeyboardUtil {
                     ],
                 ],
             },
+        };
+    }
+
+    static getCancelKeyboard() {
+        return {
+            reply_markup: {
+                keyboard: [
+                    [KEYBOARD.main.cancel.text],
+                ],
+                resize_keyboard: true,
+            },
+        };
+    }
+
+    static getEmptyKeyboard() {
+        return {
+            reply_markup: {
+                inline_keyboard: []
+            }
         };
     }
 }

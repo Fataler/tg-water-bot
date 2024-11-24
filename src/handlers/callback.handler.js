@@ -226,7 +226,7 @@ class CallbackHandler {
         if (action === KEYBOARD.reset.confirm.id) {
             await databaseService.deleteUser(chatId);
             await notificationService.cancelReminders(chatId);
-            await telegramService.sendMessage(chatId, MESSAGE.prompts.reset.success);
+            await telegramService.sendMessage(chatId, MESSAGE.prompts.reset.success, KeyboardUtil.getMainKeyboard());
         } else {
             await telegramService.sendMessage(
                 chatId,
@@ -282,7 +282,8 @@ class CallbackHandler {
     }
 
     setupHandler() {
-        telegramService.onCallback(this.handleCallback.bind(this));
+        const bot = telegramService.getBot();
+        bot.on('callback_query', (query) => this.handleCallback(query));
     }
 }
 

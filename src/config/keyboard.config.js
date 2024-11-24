@@ -9,6 +9,10 @@ const KEYBOARD = {
         settings: {
             text: '⚙️ Настройки',
         },
+        cancel: {
+            id: 'cancel',
+            text: '❌ Отмена',
+        },
     },
     periods: {
         today: {

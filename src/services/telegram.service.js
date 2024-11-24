@@ -19,29 +19,10 @@ class TelegramService {
 
     async sendMessage(chatId, text, options = {}) {
         try {
-            return await this.bot.sendMessage(chatId, text, options);
+            const defaultOptions = { disable_notification: true };
+            return await this.bot.sendMessage(chatId, text, { ...defaultOptions, ...options });
         } catch (error) {
             console.error(`Error sending message to ${chatId}:`, error);
-            throw error;
-        }
-    }
-
-    async editMessage(chatId, messageId, text, options = {}) {
-        try {
-            return await this.bot.editMessageText(text, {
-                chat_id: chatId,
-                message_id: messageId,
-                ...options,
-            });
-        } catch (error) {
-            // Ignore "message is not modified" errors as they're not really errors
-            if (
-                error.response?.body?.error_code === 400 &&
-                error.response?.body?.description?.includes('message is not modified')
-            ) {
-                return;
-            }
-            console.error(`Error editing message ${messageId} in chat ${chatId}:`, error);
             throw error;
         }
     }
