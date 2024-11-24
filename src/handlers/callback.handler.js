@@ -269,7 +269,7 @@ class CallbackHandler {
 
             await databaseService.addWaterIntake(user.id, intakeAmount, type);
             const todayIntake = await databaseService.getDailyWaterIntake(user.id);
-            
+
             await telegramService.sendMessage(
                 chatId,
                 MESSAGE.success.waterAdded(intakeAmount, todayIntake, user.daily_goal),
