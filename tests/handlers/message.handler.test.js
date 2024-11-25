@@ -1,5 +1,3 @@
-const TelegramServiceMock = require('../mocks/telegram.service.mock');
-const DatabaseServiceMock = require('../mocks/database.service.mock');
 const KeyboardUtil = require('../../src/utils/keyboard.util');
 const ValidationUtil = require('../../src/utils/validation.util');
 const callbackHandler = require('../../src/handlers/callback.handler');

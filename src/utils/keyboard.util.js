@@ -129,10 +129,13 @@ class KeyboardUtil {
 
         return {
             reply_markup: {
-                inline_keyboard: periods.map(row => 
-                    row.filter(button => !button.hide)
-                       .map(({ text, callback_data }) => ({ text, callback_data }))
-                ).filter(row => row.length > 0),
+                inline_keyboard: periods
+                    .map((row) =>
+                        row
+                            .filter((button) => !button.hide)
+                            .map(({ text, callback_data }) => ({ text, callback_data }))
+                    )
+                    .filter((row) => row.length > 0),
             },
         };
     }

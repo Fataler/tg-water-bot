@@ -1,6 +1,3 @@
-const TelegramServiceMock = require('../mocks/telegram.service.mock');
-const DatabaseServiceMock = require('../mocks/database.service.mock');
-const NotificationServiceMock = require('../mocks/notification.service.mock');
 const KeyboardUtil = require('../../src/utils/keyboard.util');
 const MESSAGE = require('../../src/config/message.config');
 const KEYBOARD = require('../../src/config/keyboard.config');
@@ -18,37 +15,28 @@ describe('CallbackHandler', () => {
     let databaseService;
     let notificationService;
     let ValidationUtil;
-    
+
     const mockChatId = 123456789;
-    const mockQuery = {
-        id: 'query123',
-        message: {
-            chat: {
-                id: mockChatId
-            },
-            message_id: 1
-        }
-    };
 
     beforeEach(() => {
         jest.clearAllMocks();
         jest.resetModules();
-        
+
         // Mock the services
         jest.mock('../../src/services/telegram.service');
         jest.mock('../../src/services/database.service');
         jest.mock('../../src/services/notification.service');
         jest.mock('../../src/utils/validation.util');
-        
+
         // Get fresh service instances
         telegramService = require('../../src/services/telegram.service');
         databaseService = require('../../src/services/database.service');
         notificationService = require('../../src/services/notification.service');
         ValidationUtil = require('../../src/utils/validation.util');
-        
+
         // Configure basic mocks
         telegramService.getBot = jest.fn().mockReturnValue({
-            answerCallbackQuery: jest.fn().mockResolvedValue(true)
+            answerCallbackQuery: jest.fn().mockResolvedValue(true),
         });
         telegramService.sendMessage = jest.fn().mockResolvedValue(true);
         telegramService.editMessageText = jest.fn().mockResolvedValue(true);
@@ -69,7 +57,7 @@ describe('CallbackHandler', () => {
 
         // Mock validation methods
         ValidationUtil.isValidAmount = jest.fn();
-        
+
         // Get fresh handler instance
         callbackHandler = require('../../src/handlers/callback.handler');
     });
@@ -81,9 +69,9 @@ describe('CallbackHandler', () => {
                 data: 'test_callback',
                 message: {
                     chat: {
-                        id: mockChatId
-                    }
-                }
+                        id: mockChatId,
+                    },
+                },
             };
 
             await callbackHandler.handleCallback(query);
@@ -97,12 +85,14 @@ describe('CallbackHandler', () => {
                 data: 'invalid_callback',
                 message: {
                     chat: {
-                        id: mockChatId
-                    }
-                }
+                        id: mockChatId,
+                    },
+                },
             };
 
-            telegramService.getBot().answerCallbackQuery.mockRejectedValueOnce(new Error('Test error'));
+            telegramService
+                .getBot()
+                .answerCallbackQuery.mockRejectedValueOnce(new Error('Test error'));
 
             await callbackHandler.handleCallback(query);
 
@@ -118,7 +108,7 @@ describe('CallbackHandler', () => {
     describe('handleGoalCallback', () => {
         it('should handle custom goal request', async () => {
             await callbackHandler.handleGoalCallback(mockChatId, 'goal_custom');
-            
+
             expect(telegramService.sendMessage).toHaveBeenCalledWith(
                 mockChatId,
                 MESSAGE.prompts.goal.set
@@ -128,9 +118,9 @@ describe('CallbackHandler', () => {
 
         it('should set numeric goal and schedule reminders', async () => {
             const goalValue = 2.5;
-            
+
             await callbackHandler.handleGoalCallback(mockChatId, `goal_${goalValue}`);
-            
+
             expect(databaseService.addUser).toHaveBeenCalledWith(mockChatId, goalValue);
             expect(notificationService.scheduleReminders).toHaveBeenCalledWith(mockChatId);
             expect(telegramService.sendMessage).toHaveBeenCalledWith(
@@ -143,8 +133,11 @@ describe('CallbackHandler', () => {
 
     describe('handleDrinkTypeCallback', () => {
         it('should handle water drink type', async () => {
-            await callbackHandler.handleDrinkTypeCallback(mockChatId, `drink_${KEYBOARD.drinks.water.id}`);
-            
+            await callbackHandler.handleDrinkTypeCallback(
+                mockChatId,
+                `drink_${KEYBOARD.drinks.water.id}`
+            );
+
             expect(telegramService.sendMessage).toHaveBeenCalledWith(
                 mockChatId,
                 MESSAGE.prompts.water.amount(
@@ -156,8 +149,11 @@ describe('CallbackHandler', () => {
         });
 
         it('should handle other drink type', async () => {
-            await callbackHandler.handleDrinkTypeCallback(mockChatId, `drink_${KEYBOARD.drinks.other.id}`);
-            
+            await callbackHandler.handleDrinkTypeCallback(
+                mockChatId,
+                `drink_${KEYBOARD.drinks.other.id}`
+            );
+
             expect(telegramService.sendMessage).toHaveBeenCalledWith(
                 mockChatId,
                 MESSAGE.prompts.other.amount(
@@ -173,7 +169,7 @@ describe('CallbackHandler', () => {
         const mockUser = {
             id: 1,
             daily_goal: 2.5,
-            notification_enabled: 1
+            notification_enabled: 1,
         };
 
         beforeEach(() => {
@@ -183,9 +179,12 @@ describe('CallbackHandler', () => {
         it('should handle daily stats', async () => {
             const stats = { total: 1.5, count: 3 };
             databaseService.getDailyWaterIntake.mockResolvedValue(stats);
-            
-            await callbackHandler.handleStatsCallback(mockChatId, `stats_${KEYBOARD.periods.today.id}`);
-            
+
+            await callbackHandler.handleStatsCallback(
+                mockChatId,
+                `stats_${KEYBOARD.periods.today.id}`
+            );
+
             expect(databaseService.getDailyWaterIntake).toHaveBeenCalledWith(mockUser.id);
             expect(telegramService.sendMessage).toHaveBeenCalled();
         });
@@ -193,18 +192,24 @@ describe('CallbackHandler', () => {
         it('should handle weekly stats', async () => {
             const stats = { total: 10.5, count: 21 };
             databaseService.getWeeklyWaterIntake.mockResolvedValue(stats);
-            
-            await callbackHandler.handleStatsCallback(mockChatId, `stats_${KEYBOARD.periods.week.id}`);
-            
+
+            await callbackHandler.handleStatsCallback(
+                mockChatId,
+                `stats_${KEYBOARD.periods.week.id}`
+            );
+
             expect(databaseService.getWeeklyWaterIntake).toHaveBeenCalledWith(mockUser.id);
             expect(telegramService.sendMessage).toHaveBeenCalled();
         });
 
         it('should handle error when user not found', async () => {
             databaseService.getUser.mockResolvedValue(null);
-            
-            await callbackHandler.handleStatsCallback(mockChatId, `stats_${KEYBOARD.periods.today.id}`);
-            
+
+            await callbackHandler.handleStatsCallback(
+                mockChatId,
+                `stats_${KEYBOARD.periods.today.id}`
+            );
+
             expect(telegramService.sendMessage).toHaveBeenCalledWith(
                 mockChatId,
                 MESSAGE.errors.stats,
@@ -215,7 +220,10 @@ describe('CallbackHandler', () => {
 
     describe('handleSettingsCallback', () => {
         it('should handle goal setting', async () => {
-            await callbackHandler.handleSettingsCallback(mockChatId, `settings_${KEYBOARD.settings.goal.id}`);
+            await callbackHandler.handleSettingsCallback(
+                mockChatId,
+                `settings_${KEYBOARD.settings.goal.id}`
+            );
 
             expect(telegramService.sendMessage).toHaveBeenCalledWith(
                 mockChatId,
@@ -227,9 +235,14 @@ describe('CallbackHandler', () => {
         it('should handle enabling notifications', async () => {
             databaseService.getUser.mockResolvedValueOnce({ notification_enabled: 0 });
 
-            await callbackHandler.handleSettingsCallback(mockChatId, `settings_${KEYBOARD.settings.notifications.id}`);
+            await callbackHandler.handleSettingsCallback(
+                mockChatId,
+                `settings_${KEYBOARD.settings.notifications.id}`
+            );
 
-            expect(databaseService.updateUser).toHaveBeenCalledWith(mockChatId, { notification_enabled: 1 });
+            expect(databaseService.updateUser).toHaveBeenCalledWith(mockChatId, {
+                notification_enabled: 1,
+            });
             expect(notificationService.scheduleReminders).toHaveBeenCalledWith(mockChatId);
             expect(telegramService.sendMessage).toHaveBeenCalledWith(
                 mockChatId,
@@ -241,9 +254,14 @@ describe('CallbackHandler', () => {
         it('should handle disabling notifications', async () => {
             databaseService.getUser.mockResolvedValueOnce({ notification_enabled: 1 });
 
-            await callbackHandler.handleSettingsCallback(mockChatId, `settings_${KEYBOARD.settings.notifications.id}`);
+            await callbackHandler.handleSettingsCallback(
+                mockChatId,
+                `settings_${KEYBOARD.settings.notifications.id}`
+            );
 
-            expect(databaseService.updateUser).toHaveBeenCalledWith(mockChatId, { notification_enabled: 0 });
+            expect(databaseService.updateUser).toHaveBeenCalledWith(mockChatId, {
+                notification_enabled: 0,
+            });
             expect(notificationService.cancelReminders).toHaveBeenCalledWith(mockChatId);
             expect(telegramService.sendMessage).toHaveBeenCalledWith(
                 mockChatId,
@@ -256,7 +274,7 @@ describe('CallbackHandler', () => {
     describe('handleResetCallback', () => {
         it('should send reset confirmation message', async () => {
             await callbackHandler.handleResetCallback(mockChatId);
-            
+
             expect(telegramService.sendMessage).toHaveBeenCalledWith(
                 mockChatId,
                 MESSAGE.prompts.reset.confirm,
@@ -267,8 +285,11 @@ describe('CallbackHandler', () => {
 
     describe('handleResetConfirmCallback', () => {
         it('should handle reset confirmation', async () => {
-            await callbackHandler.handleResetConfirmCallback(mockChatId, `reset_${KEYBOARD.reset.confirm.id}`);
-            
+            await callbackHandler.handleResetConfirmCallback(
+                mockChatId,
+                `reset_${KEYBOARD.reset.confirm.id}`
+            );
+
             expect(databaseService.deleteUser).toHaveBeenCalledWith(mockChatId);
             expect(notificationService.cancelReminders).toHaveBeenCalledWith(mockChatId);
             expect(telegramService.sendMessage).toHaveBeenCalledWith(
@@ -279,7 +300,7 @@ describe('CallbackHandler', () => {
 
         it('should handle reset cancellation', async () => {
             await callbackHandler.handleResetConfirmCallback(mockChatId, 'reset_cancel');
-            
+
             expect(databaseService.deleteUser).not.toHaveBeenCalled();
             expect(telegramService.sendMessage).toHaveBeenCalledWith(
                 mockChatId,
@@ -293,7 +314,7 @@ describe('CallbackHandler', () => {
         const mockUser = {
             id: mockChatId,
             daily_goal: 2.5,
-            notification_enabled: 1
+            notification_enabled: 1,
         };
 
         beforeEach(() => {
@@ -306,7 +327,7 @@ describe('CallbackHandler', () => {
 
         it('should handle custom amount request', async () => {
             await callbackHandler.handleDrinkIntake(mockChatId, 'custom', KEYBOARD.drinks.water.id);
-            
+
             expect(telegramService.sendMessage).toHaveBeenCalledWith(
                 mockChatId,
                 MESSAGE.prompts.water.amount(
@@ -323,10 +344,14 @@ describe('CallbackHandler', () => {
             databaseService.getDailyWaterIntake.mockResolvedValueOnce(todayIntake);
             databaseService.addWaterIntake.mockResolvedValueOnce(1); // Return lastInsertRowid
             ValidationUtil.isValidAmount.mockReturnValueOnce(true);
-            
+
             await callbackHandler.handleDrinkIntake(mockChatId, amount, KEYBOARD.drinks.water.id);
-            
-            expect(databaseService.addWaterIntake).toHaveBeenCalledWith(mockChatId, amount, KEYBOARD.drinks.water.id);
+
+            expect(databaseService.addWaterIntake).toHaveBeenCalledWith(
+                mockChatId,
+                amount,
+                KEYBOARD.drinks.water.id
+            );
             expect(databaseService.getDailyWaterIntake).toHaveBeenCalledWith(mockUser.id);
             expect(telegramService.sendMessage).toHaveBeenCalledWith(
                 mockChatId,
@@ -339,10 +364,8 @@ describe('CallbackHandler', () => {
     describe('setupHandler', () => {
         it('should set up callback handler', () => {
             callbackHandler.setupHandler();
-            
-            expect(telegramService.onCallback).toHaveBeenCalledWith(
-                expect.any(Function)
-            );
+
+            expect(telegramService.onCallback).toHaveBeenCalledWith(expect.any(Function));
         });
     });
 });

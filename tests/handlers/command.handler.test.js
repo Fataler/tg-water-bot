@@ -1,6 +1,3 @@
-const TelegramServiceMock = require('../mocks/telegram.service.mock');
-const DatabaseServiceMock = require('../mocks/database.service.mock');
-const NotificationServiceMock = require('../mocks/notification.service.mock');
 const KeyboardUtil = require('../../src/utils/keyboard.util');
 const MESSAGE = require('../../src/config/message.config');
 const config = require('../../src/config/config');
@@ -11,9 +8,9 @@ jest.mock('../../src/services/telegram.service', () => ({
     editMessage: jest.fn(),
     deleteMessage: jest.fn(),
     getBot: jest.fn().mockReturnValue({
-        answerCallbackQuery: jest.fn().mockResolvedValue(true)
+        answerCallbackQuery: jest.fn().mockResolvedValue(true),
     }),
-    onText: jest.fn()
+    onText: jest.fn(),
 }));
 
 jest.mock('../../src/services/database.service', () => ({
@@ -25,13 +22,13 @@ jest.mock('../../src/services/database.service', () => ({
     getDailyWaterIntake: jest.fn(),
     getWeeklyWaterIntake: jest.fn(),
     getMonthlyWaterIntake: jest.fn(),
-    getAllTimeWaterIntake: jest.fn()
+    getAllTimeWaterIntake: jest.fn(),
 }));
 
 jest.mock('../../src/services/notification.service', () => ({
     scheduleReminders: jest.fn(),
     cancelReminders: jest.fn(),
-    sendWaterReminder: jest.fn()
+    sendWaterReminder: jest.fn(),
 }));
 
 describe('CommandHandler', () => {
@@ -43,12 +40,12 @@ describe('CommandHandler', () => {
     beforeEach(() => {
         // Очищаем все моки перед каждым тестом
         jest.clearAllMocks();
-        
+
         // Получаем свежие инстансы сервисов
         telegramService = require('../../src/services/telegram.service');
         dbService = require('../../src/services/database.service');
         notificationService = require('../../src/services/notification.service');
-        
+
         // Получаем свежий инстанс хендлера
         commandHandler = require('../../src/handlers/command.handler');
     });
@@ -56,8 +53,8 @@ describe('CommandHandler', () => {
     describe('handleStart', () => {
         const mockMsg = {
             chat: {
-                id: 123456789
-            }
+                id: 123456789,
+            },
         };
 
         it('should send welcome message for new user', async () => {
@@ -89,7 +86,7 @@ describe('CommandHandler', () => {
         it('should handle blocked bot scenario', async () => {
             dbService.getUser.mockResolvedValue({ chatId: mockMsg.chat.id });
             telegramService.sendMessage.mockRejectedValue({
-                response: { body: { error_code: 403 } }
+                response: { body: { error_code: 403 } },
             });
 
             await commandHandler.handleStart(mockMsg);
@@ -100,7 +97,7 @@ describe('CommandHandler', () => {
 
     describe('handleReset', () => {
         const mockMsg = {
-            chat: { id: 123456789 }
+            chat: { id: 123456789 },
         };
 
         it('should send reset confirmation message', async () => {
@@ -116,7 +113,7 @@ describe('CommandHandler', () => {
 
     describe('handleAddWater', () => {
         const mockMsg = {
-            chat: { id: 123456789 }
+            chat: { id: 123456789 },
         };
 
         it('should send add water message with drink type keyboard', async () => {
@@ -132,7 +129,7 @@ describe('CommandHandler', () => {
 
     describe('handleStats', () => {
         const mockMsg = {
-            chat: { id: 123456789 }
+            chat: { id: 123456789 },
         };
 
         it('should send stats message with stats keyboard', async () => {
@@ -148,7 +145,7 @@ describe('CommandHandler', () => {
 
     describe('handleSettings', () => {
         const mockMsg = {
-            chat: { id: 123456789 }
+            chat: { id: 123456789 },
         };
         const mockUser = { chatId: 123456789 };
         const mockMessage = { message_id: 1 };
@@ -184,7 +181,7 @@ describe('CommandHandler', () => {
 
     describe('handleHelp', () => {
         const mockMsg = {
-            chat: { id: 123456789 }
+            chat: { id: 123456789 },
         };
 
         it('should send help message', async () => {
@@ -201,7 +198,7 @@ describe('CommandHandler', () => {
     describe('handleDebug', () => {
         const mockMsg = {
             chat: { id: 123456789 },
-            from: { id: config.adminIds[0] }
+            from: { id: config.adminIds[0] },
         };
         const mockUser = { chatId: 123456789 };
 
@@ -221,7 +218,7 @@ describe('CommandHandler', () => {
         it('should handle non-admin user', async () => {
             const nonAdminMsg = {
                 ...mockMsg,
-                from: { id: 999999 }
+                from: { id: 999999 },
             };
 
             await commandHandler.handleDebug(nonAdminMsg);
@@ -251,13 +248,34 @@ describe('CommandHandler', () => {
             commandHandler.setupHandlers();
 
             expect(telegramService.onText).toHaveBeenCalledTimes(7);
-            expect(telegramService.onText).toHaveBeenCalledWith(/\/start/, commandHandler.handleStart);
-            expect(telegramService.onText).toHaveBeenCalledWith(/\/reset/, commandHandler.handleReset);
-            expect(telegramService.onText).toHaveBeenCalledWith(/💧 Добавить воду/, commandHandler.handleAddWater);
-            expect(telegramService.onText).toHaveBeenCalledWith(/📊 Статистика/, commandHandler.handleStats);
-            expect(telegramService.onText).toHaveBeenCalledWith(/⚙️ Настройки/, commandHandler.handleSettings);
-            expect(telegramService.onText).toHaveBeenCalledWith(/\/help/, commandHandler.handleHelp);
-            expect(telegramService.onText).toHaveBeenCalledWith(/\/debug/, commandHandler.handleDebug);
+            expect(telegramService.onText).toHaveBeenCalledWith(
+                /\/start/,
+                commandHandler.handleStart
+            );
+            expect(telegramService.onText).toHaveBeenCalledWith(
+                /\/reset/,
+                commandHandler.handleReset
+            );
+            expect(telegramService.onText).toHaveBeenCalledWith(
+                /💧 Добавить воду/,
+                commandHandler.handleAddWater
+            );
+            expect(telegramService.onText).toHaveBeenCalledWith(
+                /📊 Статистика/,
+                commandHandler.handleStats
+            );
+            expect(telegramService.onText).toHaveBeenCalledWith(
+                /⚙️ Настройки/,
+                commandHandler.handleSettings
+            );
+            expect(telegramService.onText).toHaveBeenCalledWith(
+                /\/help/,
+                commandHandler.handleHelp
+            );
+            expect(telegramService.onText).toHaveBeenCalledWith(
+                /\/debug/,
+                commandHandler.handleDebug
+            );
         });
     });
 });
