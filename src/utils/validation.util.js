@@ -16,11 +16,12 @@ class ValidationUtil {
     }
 
     static isValidGoal(goal) {
-        const numGoal = parseFloat(goal);
+        const normalizedGoal = String(goal).replace(',', '.');
+        const numGoal = parseFloat(normalizedGoal);
         return (
             !isNaN(numGoal) &&
-            numGoal >= config.validation.water.minAmount &&
-            numGoal <= config.validation.water.maxAmount * 2
+            numGoal >= config.validation.goal.minAmount &&
+            numGoal <= config.validation.goal.maxAmount
         );
     }
 
@@ -29,13 +30,9 @@ class ValidationUtil {
         return timeRegex.test(time);
     }
 
-    static sanitizeNumber(input) {
-        const normalizedInput = String(input).replace(',', '.');
-        const num = parseFloat(normalizedInput);
-        if (isNaN(num) || num < config.validation.water.minAmount || num > config.validation.water.maxAmount) {
-            return null;
-        }
-        return num;
+    static sanitizeNumber(value) {
+        const normalizedValue = String(value).replace(',', '.');
+        return parseFloat(normalizedValue);
     }
 
     static formatWaterAmount(amount) {

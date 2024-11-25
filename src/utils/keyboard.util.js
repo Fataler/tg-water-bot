@@ -5,8 +5,8 @@ class KeyboardUtil {
         return {
             reply_markup: {
                 keyboard: [
-                    [KEYBOARD.main.addWater.text],
-                    [KEYBOARD.main.stats.text, KEYBOARD.main.settings.text],
+                    [{ text: KEYBOARD.main.addWater.text }],
+                    [{ text: KEYBOARD.main.stats.text }, { text: KEYBOARD.main.settings.text }],
                 ],
                 resize_keyboard: true,
             },
@@ -99,38 +99,67 @@ class KeyboardUtil {
         return this.getCustomAmountKeyboard(KEYBOARD.drinks.other.id);
     }
 
-    static getStatsKeyboard() {
+    static getStatsKeyboard(currentPeriod = null) {
         const periods = [
             [
                 {
                     text: KEYBOARD.periods.today.text,
-                    period: KEYBOARD.periods.today.id,
+                    callback_data: `stats_${KEYBOARD.periods.today.id}`,
+                    hide: currentPeriod === KEYBOARD.periods.today.id,
                 },
                 {
                     text: KEYBOARD.periods.week.text,
-                    period: KEYBOARD.periods.week.id,
+                    callback_data: `stats_${KEYBOARD.periods.week.id}`,
+                    hide: currentPeriod === KEYBOARD.periods.week.id,
                 },
             ],
             [
                 {
                     text: KEYBOARD.periods.month.text,
-                    period: KEYBOARD.periods.month.id,
+                    callback_data: `stats_${KEYBOARD.periods.month.id}`,
+                    hide: currentPeriod === KEYBOARD.periods.month.id,
                 },
                 {
                     text: KEYBOARD.periods.all.text,
-                    period: KEYBOARD.periods.all.id,
+                    callback_data: `stats_${KEYBOARD.periods.all.id}`,
+                    hide: currentPeriod === KEYBOARD.periods.all.id,
                 },
             ],
         ];
 
         return {
             reply_markup: {
-                inline_keyboard: periods.map((row) =>
-                    row.map((item) => ({
-                        text: item.text,
-                        callback_data: `stats_${item.period}`,
-                    }))
-                ),
+                inline_keyboard: periods.map(row => 
+                    row.filter(button => !button.hide)
+                       .map(({ text, callback_data }) => ({ text, callback_data }))
+                ).filter(row => row.length > 0),
+            },
+        };
+    }
+
+    static getAdminStatsKeyboard() {
+        return {
+            reply_markup: {
+                inline_keyboard: [
+                    [
+                        {
+                            text: KEYBOARD.adminStats.today.text,
+                            callback_data: `adminStats_${KEYBOARD.adminStats.today.id}`,
+                        },
+                    ],
+                    [
+                        {
+                            text: KEYBOARD.adminStats.week.text,
+                            callback_data: `adminStats_${KEYBOARD.adminStats.week.id}`,
+                        },
+                    ],
+                    [
+                        {
+                            text: KEYBOARD.adminStats.month.text,
+                            callback_data: `adminStats_${KEYBOARD.adminStats.month.id}`,
+                        },
+                    ],
+                ],
             },
         };
     }
@@ -174,9 +203,7 @@ class KeyboardUtil {
     static getCancelKeyboard() {
         return {
             reply_markup: {
-                keyboard: [
-                    [KEYBOARD.main.cancel.text],
-                ],
+                keyboard: [[KEYBOARD.main.cancel.text]],
                 resize_keyboard: true,
             },
         };
@@ -185,8 +212,8 @@ class KeyboardUtil {
     static getEmptyKeyboard() {
         return {
             reply_markup: {
-                inline_keyboard: []
-            }
+                inline_keyboard: [],
+            },
         };
     }
 }

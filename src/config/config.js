@@ -46,7 +46,11 @@ module.exports = {
         water: {
             minAmount: 0.05,
             maxAmount: 3,
-            defaultGoal: 2,
+        },
+        goal: {
+            minAmount: 0.5,
+            maxAmount: 5,
+            defaultValue: 2,
         },
         timeFormat: 'HH:mm',
     },

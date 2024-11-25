@@ -25,6 +25,7 @@ class CallbackHandler {
             settings: this.handleSettingsCallback.bind(this),
             reset: this.handleResetCallback.bind(this),
             resetConfirm: this.handleResetConfirmCallback.bind(this),
+            adminStats: this.handleAdminStatsCallback.bind(this),
         };
     }
 
@@ -33,33 +34,34 @@ class CallbackHandler {
         const data = query.data;
 
         try {
+            const user = await databaseService.getUser(chatId);
+            if (user) {
+                await databaseService.updateUserInfo(chatId, {
+                    username: query.from.username,
+                    first_name: query.from.first_name,
+                    last_name: query.from.last_name,
+                });
+            }
+
             const handlerName = data.includes('-') ? data.split('-')[0] : data.split('_')[0];
             if (this.handlers[handlerName]) {
-                await this.handlers[handlerName](chatId, data);
+                await this.handlers[handlerName](chatId, data, query);
             }
-            await telegramService.getBot().answerCallbackQuery(query.id);
         } catch (error) {
-            logger.error('Error in callback handler:', error);
-            await telegramService.sendMessage(
-                chatId,
-                MESSAGE.errors.general,
-                KeyboardUtil.getMainKeyboard()
-            );
+            logger.error('Error handling callback:', error);
+            await telegramService.sendMessage(chatId, MESSAGE.errors.general);
         }
     }
 
-    async handleGoalCallback(chatId, data) {
-        const [, goal] = data.split('_');
+    async handleGoalCallback(chatId, data, query) {
+        const goal = parseFloat(data.split('_')[1]);
 
-        if (goal === 'custom') {
-            await telegramService.sendMessage(chatId, MESSAGE.prompts.goal.set);
-            this.userTemp.set(chatId, { waitingFor: 'custom_goal' });
-            return;
-        }
+        await databaseService.addUser(chatId, goal, {
+            username: query.from.username,
+            first_name: query.from.first_name,
+            last_name: query.from.last_name,
+        });
 
-        const goalValue = parseFloat(goal);
-        await databaseService.addUser(chatId, goalValue);
-        await notificationService.scheduleReminders(chatId);
         await telegramService.sendMessage(
             chatId,
             MESSAGE.success.goalSet,
@@ -77,7 +79,8 @@ class CallbackHandler {
                         chatId,
                         MESSAGE.prompts.water.amount(
                             config.validation.water.minAmount,
-                            config.validation.water.maxAmount
+                            config.validation.water.maxAmount,
+                            KEYBOARD.drinks.water.id
                         ),
                         KeyboardUtil.getWaterAmountKeyboard()
                     );
@@ -88,7 +91,8 @@ class CallbackHandler {
                         chatId,
                         MESSAGE.prompts.other.amount(
                             config.validation.water.minAmount,
-                            config.validation.water.maxAmount
+                            config.validation.water.maxAmount,
+                            KEYBOARD.drinks.other.id
                         ),
                         KeyboardUtil.getOtherAmountKeyboard()
                     );
@@ -114,12 +118,9 @@ class CallbackHandler {
         await this.handleDrinkIntake(chatId, amount, KEYBOARD.drinks.other.id);
     }
 
-    async handleStatsCallback(chatId, data, messageId) {
+    async handleStatsCallback(chatId, data, query) {
         try {
             const period = data.split('_')[1];
-            if (messageId) {
-                await telegramService.deleteMessage(chatId, messageId);
-            }
             const user = await databaseService.getUser(chatId);
             if (!user) {
                 throw new Error('User not found');
@@ -150,16 +151,36 @@ class CallbackHandler {
                     messageType = MESSAGE.stats.today;
             }
 
+            if (!stats) {
+                await telegramService.sendMessage(
+                    chatId,
+                    MESSAGE.errors.getStats,
+                    KeyboardUtil.getMainKeyboard()
+                );
+                return;
+            }
+
             const message = MESSAGE.stats.message(messageType, stats, period, user.daily_goal);
             if (!message) {
-                throw new Error('Empty stats message');
+                await telegramService.sendMessage(
+                    chatId,
+                    MESSAGE.errors.getStats,
+                    KeyboardUtil.getMainKeyboard()
+                );
+                return;
             }
-            await telegramService.sendMessage(chatId, message, KeyboardUtil.getMainKeyboard());
+
+            await telegramService.editMessageText(
+                chatId,
+                query.message.message_id,
+                message,
+                KeyboardUtil.getStatsKeyboard(period)
+            );
         } catch (error) {
-            logger.error('Error handling stats:', error);
+            logger.error('Error handling stats callback:', error);
             await telegramService.sendMessage(
                 chatId,
-                MESSAGE.errors.stats,
+                MESSAGE.errors.getStats,
                 KeyboardUtil.getMainKeyboard()
             );
         }
@@ -226,7 +247,11 @@ class CallbackHandler {
         if (action === KEYBOARD.reset.confirm.id) {
             await databaseService.deleteUser(chatId);
             await notificationService.cancelReminders(chatId);
-            await telegramService.sendMessage(chatId, MESSAGE.prompts.reset.success, KeyboardUtil.getMainKeyboard());
+            await telegramService.sendMessage(
+                chatId,
+                MESSAGE.prompts.reset.success,
+                KeyboardUtil.getMainKeyboard()
+            );
         } else {
             await telegramService.sendMessage(
                 chatId,
@@ -240,12 +265,21 @@ class CallbackHandler {
         try {
             if (amount === 'custom') {
                 this.userTemp.set(chatId, { waitingFor: `custom_${type}` });
+                const message =
+                    type === KEYBOARD.drinks.water.id
+                        ? MESSAGE.prompts.water.amount(
+                              config.validation.water.minAmount,
+                              config.validation.water.maxAmount
+                          )
+                        : MESSAGE.prompts.other.amount(
+                              config.validation.water.minAmount,
+                              config.validation.water.maxAmount
+                          );
+
                 await telegramService.sendMessage(
                     chatId,
-                    MESSAGE.prompts.water.amount(
-                        config.validation.water.minAmount,
-                        config.validation.water.maxAmount
-                    )
+                    message,
+                    KeyboardUtil.getCancelKeyboard()
                 );
                 return;
             }
@@ -272,12 +306,105 @@ class CallbackHandler {
 
             await telegramService.sendMessage(
                 chatId,
-                MESSAGE.success.waterAdded(intakeAmount, todayIntake, user.daily_goal),
+                MESSAGE.success.waterAdded(intakeAmount, todayIntake, user.daily_goal, type),
                 KeyboardUtil.getMainKeyboard()
             );
         } catch (error) {
             logger.error('Error handling drink intake:', error);
             await telegramService.sendMessage(chatId, MESSAGE.errors.general);
+        }
+    }
+
+    async handleAdminStatsCallback(chatId, data) {
+        try {
+            const period = data.split('_')[1];
+            const users = await databaseService.getAllUsers();
+            let statsMessage = '';
+
+            switch (period) {
+                case KEYBOARD.adminStats.today.id:
+                    statsMessage = MESSAGE.commands.adminStats.today;
+                    break;
+                case KEYBOARD.adminStats.week.id:
+                    statsMessage = MESSAGE.commands.adminStats.week;
+                    break;
+                case KEYBOARD.adminStats.month.id:
+                    statsMessage = MESSAGE.commands.adminStats.month;
+                    break;
+                default:
+                    return;
+            }
+
+            let hasData = false;
+            let activeUsers = 0;
+            let totalWaterAll = 0;
+            let totalOtherAll = 0;
+            let userStatsMessage = '';
+
+            for (const user of users) {
+                const days =
+                    period === KEYBOARD.adminStats.today.id
+                        ? 1
+                        : period === KEYBOARD.adminStats.week.id
+                          ? 7
+                          : 30;
+
+                const drinks = await databaseService.getWaterIntakeHistory(user.id, days);
+                if (drinks && drinks.length > 0) {
+                    const totalWater = drinks.reduce((sum, day) => sum + day.water, 0);
+                    const totalOther = drinks.reduce((sum, day) => sum + day.other, 0);
+
+                    if (totalWater > 0 || totalOther > 0) {
+                        hasData = true;
+                        activeUsers++;
+                        totalWaterAll += totalWater;
+                        totalOtherAll += totalOther;
+
+                        const userIdentifiers = [];
+                        if (user.first_name) userIdentifiers.push(user.first_name);
+                        if (user.last_name) userIdentifiers.push(user.last_name);
+                        if (user.username) userIdentifiers.push(`@${user.username}`);
+                        userIdentifiers.push(`[${user.chat_id}]`);
+
+                        userStatsMessage += MESSAGE.commands.adminStats.userStats(
+                            userIdentifiers.join(' | '),
+                            totalWater.toFixed(2),
+                            totalOther.toFixed(2)
+                        );
+                    }
+                }
+            }
+
+            if (!hasData) {
+                await telegramService.sendMessage(
+                    chatId,
+                    MESSAGE.commands.adminStats.noData,
+                    KeyboardUtil.getAdminStatsKeyboard()
+                );
+                return;
+            }
+
+            statsMessage += MESSAGE.commands.adminStats.summary(
+                users.length,
+                activeUsers,
+                totalWaterAll.toFixed(2),
+                totalOtherAll.toFixed(2)
+            );
+            statsMessage += userStatsMessage;
+            statsMessage += MESSAGE.separator;
+
+            await telegramService.sendMessage(
+                chatId,
+                statsMessage,
+                KeyboardUtil.getAdminStatsKeyboard()
+            );
+        } catch (error) {
+            logger.error('Error in handleAdminStatsCallback:', error);
+            await telegramService.sendMessage(
+                chatId,
+                MESSAGE.errors.general,
+                KeyboardUtil.getMainKeyboard()
+            );
         }
     }
 

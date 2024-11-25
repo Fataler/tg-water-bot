@@ -1,6 +1,8 @@
 const ValidationUtil = require('../utils/validation.util');
+const KEYBOARD = require('../config/keyboard.config');
 
 const MESSAGE = {
+    separator: '\n━━━━━━━━━━━━━━━━\n',
     errors: {
         addWater: '❌ Произошла ошибка при добавлении записи. Попробуйте еще раз.',
         getStats: '❌ Произошла ошибка при получении статистики. Попробуйте еще раз.',
@@ -12,6 +14,7 @@ const MESSAGE = {
         },
         noAccess: '⛔️ У вас нет прав для выполнения этой команды',
         userNotFound: '⚠️ Пользователь не найден. Используйте команду /start для регистрации.',
+        unknownCommand: '⚠️ Неизвестная команда. Используйте команду /help для получения справки.',
     },
     commands: {
         start: {
@@ -19,7 +22,7 @@ const MESSAGE = {
                 '👋 Привет! Я помогу тебе следить за потреблением воды. 💧\n\n🎯 Давай для начала установим твою цель на день:',
             welcome_back: '👋 С возвращением! Что будем делать? 💪',
         },
-        addWater: '🥤 Что ты выпил(а)?',
+        addWater: '💧🥤 Что ты выпил(а)?',
         stats: '📊 За какой период показать статистику?',
         settings: '⚙️ Настройки:',
         help:
@@ -34,22 +37,51 @@ const MESSAGE = {
             '/help - показать эту справку\n' +
             '\n*Как пользоваться:*\n' +
             '1. Установите дневную цель потребления воды\n' +
-            '2. Настройте время напоминаний\n' +
-            '3. Каждый раз когда пьёте воду, нажимайте "💧 Добавить воду"\n' +
-            '4. Следите за прогрессом в разделе "📊 Статистика"',
+            '2. Каждый раз когда пьёте воду, нажимайте "💧 Добавить воду"\n' +
+            '3. Следите за прогрессом в разделе "📊 Статистика"' +
+            '4. Получайте напоминания о достижениидневной цели\n',
         debug: {
             testNotificationSent: '✅ Тестовое уведомление отправлено',
             testNotificationNotSent: '❌ Тестовое уведомление не отправлено',
         },
+        adminStats: {
+            title: '👥 Статистика использования бота',
+            noData: '📊 Нет данных за выбранный период',
+            today: '📅 Статистика за сегодня:',
+            week: '📆 Статистика за неделю:',
+            month: '📊 Статистика за месяц:',
+            summary: (totalUsers, activeUsers, totalWater, totalOther) =>
+                '\n📊 ОБЩАЯ СТАТИСТИКА\n' +
+                `├ 👥 Всего пользователей: ${totalUsers}\n` +
+                `├ 🎯 Активных за период: ${activeUsers}\n` +
+                `├ 💧 Всего воды: ${totalWater}л\n` +
+                `├ 🥤 Всего других напитков: ${totalOther}л\n` +
+                `└ 📈 Общий объем: ${(parseFloat(totalWater) + parseFloat(totalOther)).toFixed(2)}л\n`,
+            userStats: (username, totalWater, totalOther) =>
+                MESSAGE.separator +
+                `👤 ${username}\n` +
+                `├ 💧 Вода: ${totalWater}л\n` +
+                `├ 🥤 Другие напитки: ${totalOther}л\n` +
+                `└ 📊 Всего: ${(parseFloat(totalWater) + parseFloat(totalOther)).toFixed(2)}л\n`,
+        },
     },
     success: {
         goalSet: '🎯 Цель установлена! Можешь начинать отслеживать потребление воды.',
-        waterAdded: (amount, daily, goal) => {
+        waterAdded: (amount, daily, goal, type) => {
             const total = typeof daily === 'object' ? daily.total : daily;
             const percent = ValidationUtil.formatPercentage(total, goal);
-            const progressEmoji = percent >= 100 ? '🌟' : '💪';
+            const progressEmoji = percent >= 100 ? '🎯 Цель достигнута!' : '💪 Так держать!';
+            const drinkEmoji = type === KEYBOARD.drinks.water.id ? '💧' : '🥤';
+            const drinkType = type === KEYBOARD.drinks.water.id ? 'воды' : 'напитка';
             const progressBar = ValidationUtil.createProgressBar(total, goal);
-            return `✅ Добавлено ${amount}л!\n\n💧 Всего за сегодня: ${total}л из ${goal}л\n${progressBar} ${percent}%\n\n${progressEmoji} ${percent >= 100 ? 'Дневная цель достигнута! Молодец!' : 'Продолжай в том же духе!'}`;
+
+            return (
+                `${drinkEmoji} Добавлено ${amount}л ${drinkType}\n` +
+                MESSAGE.separator +
+                `📊 Всего за сегодня: ${total}л из ${goal}л (${percent}%)\n` +
+                `\n ${progressBar}\n` +
+                `\n${progressEmoji}`
+            );
         },
         reset: '✅ Настройки успешно сброшены.\n\nИспользуйте команду /start для новой регистрации.',
         operationCancelled: '❌ Операция отменена',
@@ -124,27 +156,27 @@ const MESSAGE = {
 
             total = water + other;
 
-            message += '\n📊 ОБЩИЕ ПОКАЗАТЕЛИ\n';
-            message += '━━━━━━━━━━━━━━━━\n';
-            message += `💧 Вода: ${water.toFixed(2)}л\n`;
-            message += `🥤 Другие напитки: ${other.toFixed(2)}л\n`;
-            message += `📈 Всего выпито: ${total.toFixed(2)}л\n`;
+            message += '\n📊 ОБЩИЕ ПОКАЗАТЕЛИ';
+            message += MESSAGE.separator;
+            message += `├ 💧 Вода: ${water.toFixed(2)}л\n`;
+            message += `├ 🥤 Другие напитки: ${other.toFixed(2)}л\n`;
+            message += `└ 📈 Всего выпито: ${total.toFixed(2)}л\n`;
 
             if (total > 0) {
-                message += '━━━━━━━━━━━━━━━━\n';
+                message += MESSAGE.separator;
                 message += `${ValidationUtil.createRatioBar(water, other)}\n`;
-                message += '━━━━━━━━━━━━━━━━\n';
+                message += MESSAGE.separator;
             }
 
             if (period === 'today') {
-                message += '\n🎯 ДНЕВНАЯ ЦЕЛЬ\n';
-                message += '━━━━━━━━━━━━━━━━\n';
+                message += '\n🎯 ДНЕВНАЯ ЦЕЛЬ';
+                message += MESSAGE.separator;
                 message += MESSAGE.stats.formatDailyProgress(total, goal);
             } else if (period === 'week') {
                 const { daily, previous } = stats;
 
-                message += '\n📅 СТАТИСТИКА ПО ДНЯМ\n';
-                message += '━━━━━━━━━━━━━━━━\n';
+                message += '\n📅 СТАТИСТИКА ПО ДНЯМ';
+                message += MESSAGE.separator;
                 daily.forEach((day) => {
                     if (day.total > 0) {
                         const date = new Date(day.date);
@@ -160,8 +192,8 @@ const MESSAGE = {
                     }
                 });
 
-                message += '\n⏮ ПРЕДЫДУЩАЯ НЕДЕЛЯ\n';
-                message += '━━━━━━━━━━━━━━━━\n';
+                message += '\n⏮ ПРЕДЫДУЩАЯ НЕДЕЛЯ';
+                message += MESSAGE.separator;
                 message += `├ 💧 Вода: ${previous.water}л\n`;
                 message += `├ 🥤 Другое: ${previous.other}л\n`;
                 message += `└ 📈 Всего: ${previous.total}л\n`;
@@ -172,8 +204,8 @@ const MESSAGE = {
             } else if (period === 'month') {
                 const { weekly, previous } = stats;
 
-                message += '\n📅 СТАТИСТИКА ПО НЕДЕЛЯМ\n';
-                message += '━━━━━━━━━━━━━━━━\n';
+                message += '\n📅 СТАТИСТИКА ПО НЕДЕЛЯМ';
+                message += MESSAGE.separator;
                 weekly.forEach((week) => {
                     if (week.total > 0) {
                         message += `\nНеделя ${week.week}\n`;
@@ -184,8 +216,8 @@ const MESSAGE = {
                     }
                 });
 
-                message += '\n⏮ ПРЕДЫДУЩИЙ МЕСЯЦ\n';
-                message += '━━━━━━━━━━━━━━━━\n';
+                message += '\n⏮ ПРЕДЫДУЩИЙ МЕСЯЦ';
+                message += MESSAGE.separator;
                 message += `├ 💧 Вода: ${previous.water}л\n`;
                 message += `├ 🥤 Другое: ${previous.other}л\n`;
                 message += `└ 📈 Всего: ${previous.total}л\n`;

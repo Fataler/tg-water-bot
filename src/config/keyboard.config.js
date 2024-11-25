@@ -14,6 +14,20 @@ const KEYBOARD = {
             text: '❌ Отмена',
         },
     },
+    adminStats: {
+        today: {
+            id: 'adminToday',
+            text: '📅 За сегодня',
+        },
+        week: {
+            id: 'adminWeek',
+            text: '📆 За неделю',
+        },
+        month: {
+            id: 'adminMonth',
+            text: '📊 За месяц',
+        },
+    },
     periods: {
         today: {
             id: 'today',

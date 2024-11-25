@@ -5,7 +5,7 @@ const KeyboardUtil = require('../utils/keyboard.util');
 const config = require('../config/config');
 const logger = require('../config/logger.config');
 const MESSAGE = require('../config/message.config');
-const callbackHandler = require('./callback.handler');
+const KEYBOARD = require('../config/keyboard.config');
 
 class CommandHandler {
     async handleStart(msg) {
@@ -20,6 +20,12 @@ class CommandHandler {
             );
         } else {
             try {
+                // Update user info
+                await dbService.updateUserInfo(chatId, {
+                    username: msg.from.username,
+                    first_name: msg.from.first_name,
+                    last_name: msg.from.last_name,
+                });
                 await telegramService.sendMessage(
                     chatId,
                     MESSAGE.commands.start.welcome_back,
@@ -59,11 +65,55 @@ class CommandHandler {
 
     async handleStats(msg) {
         const chatId = msg.chat.id;
-        await telegramService.sendMessage(
-            chatId,
-            MESSAGE.commands.stats,
-            KeyboardUtil.getStatsKeyboard()
-        );
+
+        try {
+            const user = await dbService.getUser(chatId);
+            if (!user) {
+                await telegramService.sendMessage(chatId, MESSAGE.errors.userNotFound);
+                return;
+            }
+
+            const stats = await dbService.getDailyWaterIntake(user.id);
+            if (!stats) {
+                await telegramService.sendMessage(
+                    chatId,
+                    MESSAGE.errors.getStats,
+                    KeyboardUtil.getMainKeyboard()
+                );
+                return;
+            }
+
+            const defaultPeriod = KEYBOARD.periods.today.id;
+
+            const message = MESSAGE.stats.message(
+                MESSAGE.stats.today,
+                stats,
+                defaultPeriod,
+                user.daily_goal
+            );
+
+            if (!message) {
+                await telegramService.sendMessage(
+                    chatId,
+                    MESSAGE.errors.getStats,
+                    KeyboardUtil.getMainKeyboard()
+                );
+                return;
+            }
+
+            await telegramService.sendMessage(
+                chatId,
+                message,
+                KeyboardUtil.getStatsKeyboard(defaultPeriod)
+            );
+        } catch (error) {
+            logger.error('Error handling stats command:', error);
+            await telegramService.sendMessage(
+                chatId,
+                MESSAGE.errors.getStats,
+                KeyboardUtil.getMainKeyboard()
+            );
+        }
     }
 
     async handleSettings(msg) {
@@ -116,7 +166,7 @@ class CommandHandler {
 
             const sent = await notificationService.sendWaterReminder(user);
 
-            var debugMessageSentText = sent
+            const debugMessageSentText = sent
                 ? MESSAGE.commands.debug.testNotificationSent
                 : MESSAGE.commands.debug.testNotificationNotSent;
 
@@ -124,6 +174,26 @@ class CommandHandler {
         } catch (error) {
             logger.error('Error in debug command:', error);
             await telegramService.sendMessage(msg.chat.id, MESSAGE.errors.general);
+        }
+    }
+
+    async handleAdminStats(msg) {
+        const chatId = msg.chat.id;
+
+        if (!config.adminIds.includes(chatId)) {
+            await telegramService.sendMessage(chatId, MESSAGE.errors.noAccess);
+            return;
+        }
+
+        try {
+            await telegramService.sendMessage(
+                chatId,
+                MESSAGE.commands.adminStats.title,
+                KeyboardUtil.getAdminStatsKeyboard()
+            );
+        } catch (error) {
+            logger.error('Error in handleAdminStats:', error);
+            await telegramService.sendMessage(chatId, MESSAGE.errors.general);
         }
     }
 
@@ -136,6 +206,7 @@ class CommandHandler {
         bot.onText(/⚙️ Настройки/, (msg) => this.handleSettings(msg));
         bot.onText(/\/help/, (msg) => this.handleHelp(msg));
         bot.onText(/\/debug/, (msg) => this.handleDebug(msg));
+        bot.onText(/\/adminstats/, (msg) => this.handleAdminStats(msg));
     }
 }
 

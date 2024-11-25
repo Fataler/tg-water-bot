@@ -1,5 +1,6 @@
 const TelegramBot = require('node-telegram-bot-api');
 const config = require('../config/config');
+const logger = require('../config/logger.config');
 
 class TelegramService {
     constructor() {
@@ -8,31 +9,33 @@ class TelegramService {
     }
 
     setupErrorHandling() {
-        this.bot.on('polling_error', (error) => {
-            console.error('Telegram polling error:', error);
-        });
-
         this.bot.on('error', (error) => {
-            console.error('Telegram error:', error);
+            logger.error('Telegram error:', error);
         });
     }
 
     async sendMessage(chatId, text, options = {}) {
+        if (!text) {
+            logger.error(`Attempt to send empty message to chat ${chatId}`);
+            return;
+        }
+
         try {
-            const defaultOptions = { disable_notification: true };
-            return await this.bot.sendMessage(chatId, text, { ...defaultOptions, ...options });
+            return await this.bot.sendMessage(chatId, text, {
+                disable_notification: true,
+                ...options,
+            });
         } catch (error) {
-            console.error(`Error sending message to ${chatId}:`, error);
+            logger.error(`Error sending message to ${chatId}:`, error);
             throw error;
         }
     }
 
     async deleteMessage(chatId, messageId) {
         try {
-            return await this.bot.deleteMessage(chatId, messageId);
+            await this.bot.deleteMessage(chatId, messageId);
         } catch (error) {
-            console.error(`Error deleting message ${messageId} in chat ${chatId}:`, error);
-            throw error;
+            logger.error(`Error deleting message ${messageId} in chat ${chatId}:`, error);
         }
     }
 
@@ -46,6 +49,19 @@ class TelegramService {
 
     getBot() {
         return this.bot;
+    }
+
+    async editMessageText(chatId, messageId, text, options = {}) {
+        try {
+            return await this.bot.editMessageText(text, {
+                chat_id: chatId,
+                message_id: messageId,
+                ...options,
+            });
+        } catch (error) {
+            logger.error(`Error editing message ${messageId} in chat ${chatId}:`, error);
+            throw error;
+        }
     }
 }
 

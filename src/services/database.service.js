@@ -44,22 +44,46 @@ class DatabaseService {
         }
     }
 
-    async addUser(userId, dailyGoal) {
+    async addUser(userId, dailyGoal, userInfo = {}) {
         try {
             const user = await this.getUser(userId);
             if (user) {
                 this.db
-                    .prepare('UPDATE users SET daily_goal = ? WHERE chat_id = ?')
-                    .run(dailyGoal, userId);
-                return user;
+                    .prepare(
+                        `UPDATE users 
+                         SET daily_goal = ?,
+                             username = ?,
+                             first_name = ?,
+                             last_name = ?,
+                             updated_at = strftime('%s', 'now')
+                         WHERE chat_id = ?`
+                    )
+                    .run(
+                        dailyGoal,
+                        userInfo.username || null,
+                        userInfo.first_name || null,
+                        userInfo.last_name || null,
+                        userId
+                    );
+                return this.getUser(userId);
             }
 
-            const result = this.db
-                .prepare('INSERT INTO users (chat_id, daily_goal) VALUES (?, ?)')
-                .run(userId, dailyGoal);
-            return { id: result.lastInsertRowid, chat_id: userId, daily_goal: dailyGoal };
+            this.db
+                .prepare(
+                    `INSERT INTO users 
+                     (chat_id, daily_goal, username, first_name, last_name) 
+                     VALUES (?, ?, ?, ?, ?)`
+                )
+                .run(
+                    userId,
+                    dailyGoal,
+                    userInfo.username || null,
+                    userInfo.first_name || null,
+                    userInfo.last_name || null
+                );
+            return this.getUser(userId);
         } catch (error) {
-            logger.error('Error adding user:', error);
+            logger.error('Error in addUser:', error);
             throw error;
         }
     }
@@ -68,7 +92,6 @@ class DatabaseService {
         try {
             const user = this.db.prepare('SELECT * FROM users WHERE chat_id = ?').get(chatId);
             if (user) {
-                // Преобразуем notification_enabled в булево значение
                 user.notification_enabled = Boolean(user.notification_enabled);
             }
             return user;
@@ -132,7 +155,6 @@ class DatabaseService {
         try {
             const rows = await this.getWaterIntakeHistory(userId, 7);
 
-            // Calculate current week totals
             const currentData = rows.reduce(
                 (acc, row) => ({
                     water: acc.water + Number(row.water || 0),
@@ -142,7 +164,6 @@ class DatabaseService {
                 { water: 0, other: 0, total: 0 }
             );
 
-            // Format daily data with proper defaults
             const daily = rows.map((row) => ({
                 date: row.date,
                 water: Number(row.water.toFixed(2) || 0),
@@ -150,7 +171,6 @@ class DatabaseService {
                 total: Number(row.total.toFixed(2) || 0),
             }));
 
-            // Get previous week data
             const previousRows = await this.getWaterIntakeHistory(userId, 14);
             const previousWeekData = previousRows.slice(7).reduce(
                 (acc, row) => ({
@@ -185,7 +205,6 @@ class DatabaseService {
             const daysInMonth = 30;
             const allRows = await this.getWaterIntakeHistory(userId, daysInMonth * 2);
 
-            // Get current month data
             const rows = allRows.slice(0, daysInMonth);
             const currentData = rows.reduce(
                 (acc, row) => ({
@@ -196,7 +215,6 @@ class DatabaseService {
                 { water: 0, other: 0, total: 0 }
             );
 
-            // Format daily data
             const daily = rows.map((row) => ({
                 date: row.date,
                 water: Number(row.water || 0),
@@ -204,7 +222,6 @@ class DatabaseService {
                 total: Number(row.total || 0),
             }));
 
-            // Get previous month data
             const previousMonthData = allRows.slice(daysInMonth).reduce(
                 (acc, row) => ({
                     water: acc.water + Number(row.water || 0),
@@ -214,7 +231,6 @@ class DatabaseService {
                 { water: 0, other: 0, total: 0 }
             );
 
-            // Group data by weeks for current month
             const weeklyData = [];
             for (let i = 0; i < rows.length; i += 7) {
                 const weekRows = rows.slice(i, Math.min(i + 7, rows.length));
@@ -378,10 +394,8 @@ class DatabaseService {
                 return;
             }
 
-            // Удаляем записи о потреблении воды
             this.db.prepare('DELETE FROM water_intake WHERE user_id = ?').run(user.id);
 
-            // Удаляем пользователя
             this.db.prepare('DELETE FROM users WHERE chat_id = ?').run(chatId);
 
             logger.info('User deleted successfully:', chatId);
@@ -414,6 +428,19 @@ class DatabaseService {
             logger.error('Error updating user:', error);
             throw error;
         }
+    }
+
+    async updateUserInfo(chatId, userInfo) {
+        const { username, first_name, last_name } = userInfo;
+        return this.db
+            .prepare(
+                `UPDATE users 
+                SET username = ?, 
+                    first_name = ?, 
+                    last_name = ?
+                WHERE chat_id = ?`
+            )
+            .run(username, first_name, last_name, chatId);
     }
 
     async close() {

@@ -6,21 +6,36 @@ const callbackHandler = require('./callback.handler');
 const config = require('../config/config');
 const MESSAGE = require('../config/message.config');
 const KEYBOARD = require('../config/keyboard.config');
+const logger = require('../config/logger.config');
 
 class MessageHandler {
-    async handleMessage(msg) {
+    async handle(msg) {
         const chatId = msg.chat.id;
         const text = msg.text;
 
-        if (text === '/start') {
-            return;
-        }
-
         try {
             const user = await dbService.getUser(chatId);
+            if (user) {
+                await dbService.updateUserInfo(chatId, {
+                    username: msg.from.username,
+                    first_name: msg.from.first_name,
+                    last_name: msg.from.last_name,
+                });
+            }
 
-            if (!user) {
-                await telegramService.sendMessage(chatId, MESSAGE.errors.userNotFound);
+            if (!text) {
+                return;
+            }
+
+            if (text === '/start') {
+                if (user) {
+                    callbackHandler.userTemp.delete(chatId);
+                    await telegramService.sendMessage(
+                        chatId,
+                        MESSAGE.commands.start.welcome_back,
+                        KeyboardUtil.getMainKeyboard()
+                    );
+                }
                 return;
             }
 
@@ -35,71 +50,76 @@ class MessageHandler {
                     );
                     return;
                 }
-                await this.handleCustomInput(chatId, text, userTemp);
-                return;
-            }
-        } catch (error) {
-            console.error('Error handling message:', error);
-            await telegramService.sendMessage(chatId, MESSAGE.errors.general);
-        }
-    }
 
-    async handleCustomInput(chatId, text, userTemp) {
-        const amount = ValidationUtil.sanitizeNumber(text);
+                if (userTemp.waitingFor === 'custom_goal') {
+                    const amount = parseFloat(text);
+                    if (!ValidationUtil.isValidGoal(amount)) {
+                        await telegramService.sendMessage(
+                            chatId,
+                            MESSAGE.errors.validation.goal(
+                                config.validation.goal.minAmount,
+                                config.validation.goal.maxAmount
+                            ),
+                            KeyboardUtil.getCancelKeyboard()
+                        );
+                        return;
+                    }
 
-        if (!amount) {
-            await telegramService.sendMessage(
-                chatId,
-                MESSAGE.errors.validation.invalidNumber,
-                KeyboardUtil.getCancelKeyboard()
-            );
-            return;
-        }
-
-        switch (userTemp.waitingFor) {
-            case 'custom_goal':
-                if (ValidationUtil.isValidGoal(amount)) {
-                    await dbService.addUser(chatId, amount);
+                    await dbService.updateUserInfo(chatId, { daily_goal: amount });
+                    callbackHandler.userTemp.delete(chatId);
                     await telegramService.sendMessage(
                         chatId,
                         MESSAGE.success.goalSet,
                         KeyboardUtil.getMainKeyboard()
                     );
-                    callbackHandler.userTemp.delete(chatId);
-                } else {
-                    await telegramService.sendMessage(
-                        chatId,
-                        MESSAGE.errors.validation.goal(
-                            config.validation.water.minAmount,
-                            config.validation.water.maxAmount * 2
-                        ),
-                        KeyboardUtil.getCancelKeyboard()
-                    );
+                    return;
                 }
-                break;
 
-            case 'custom_water':
-            case 'custom_other':
-                if (ValidationUtil.isValidAmount(amount)) {
-                    const drinkType = userTemp.waitingFor === 'custom_water' ? 'water' : 'other';
-                    await callbackHandler.handleDrinkIntake(chatId, amount.toString(), drinkType);
+                if (
+                    userTemp.waitingFor === 'custom_water' ||
+                    userTemp.waitingFor === 'custom_other'
+                ) {
+                    const amount = parseFloat(text);
+                    if (!ValidationUtil.isValidAmount(amount)) {
+                        await telegramService.sendMessage(
+                            chatId,
+                            MESSAGE.errors.validation.amount(
+                                config.validation.water.minAmount,
+                                config.validation.water.maxAmount
+                            ),
+                            KeyboardUtil.getCancelKeyboard()
+                        );
+                        return;
+                    }
+
+                    const drinkType =
+                        userTemp.waitingFor === 'custom_water'
+                            ? KEYBOARD.drinks.water.id
+                            : KEYBOARD.drinks.other.id;
+                    await callbackHandler.handleDrinkIntake(chatId, amount, drinkType);
                     callbackHandler.userTemp.delete(chatId);
-                } else {
-                    await telegramService.sendMessage(
-                        chatId,
-                        MESSAGE.errors.validation.amount(
-                            config.validation.water.minAmount,
-                            config.validation.water.maxAmount
-                        ),
-                        KeyboardUtil.getCancelKeyboard()
-                    );
+                    return;
                 }
-                break;
+            } else if (text === KEYBOARD.main.cancel.text) {
+                await telegramService.sendMessage(
+                    chatId,
+                    MESSAGE.commands.start.welcome_back,
+                    KeyboardUtil.getMainKeyboard()
+                );
+                return;
+            }
+        } catch (error) {
+            logger.error('Error handling message:', error);
+            await telegramService.sendMessage(
+                chatId,
+                MESSAGE.errors.general,
+                KeyboardUtil.getMainKeyboard()
+            );
         }
     }
 
     setupHandler() {
-        telegramService.getBot().on('message', this.handleMessage.bind(this));
+        telegramService.getBot().on('message', this.handle.bind(this));
     }
 }
 
