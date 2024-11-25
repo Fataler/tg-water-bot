@@ -180,20 +180,82 @@ class CommandHandler {
     async handleAdminStats(msg) {
         const chatId = msg.chat.id;
 
-        if (!config.adminIds.includes(chatId)) {
-            await telegramService.sendMessage(chatId, MESSAGE.errors.noAccess);
-            return;
-        }
-
         try {
+            if (!config.adminIds.includes(chatId)) {
+                await telegramService.sendMessage(
+                    chatId,
+                    MESSAGE.errors.noAccess,
+                    KeyboardUtil.getMainKeyboard()
+                );
+                return;
+            }
+
+            const defaultPeriod = KEYBOARD.adminStats.today.id;
+            const users = await dbService.getAllUsers();
+            let hasData = false;
+            let activeUsers = 0;
+            let totalWaterAll = 0;
+            let totalOtherAll = 0;
+            let userStatsMessage = '';
+
+            for (const user of users) {
+                const drinks = await dbService.getWaterIntakeHistory(user.id, 1);
+                if (drinks && drinks.length > 0) {
+                    const totalWater = drinks.reduce((sum, day) => sum + day.water, 0);
+                    const totalOther = drinks.reduce((sum, day) => sum + day.other, 0);
+
+                    if (totalWater > 0 || totalOther > 0) {
+                        hasData = true;
+                        activeUsers++;
+                        totalWaterAll += totalWater;
+                        totalOtherAll += totalOther;
+
+                        const userIdentifiers = [];
+                        if (user.first_name) userIdentifiers.push(user.first_name);
+                        if (user.last_name) userIdentifiers.push(user.last_name);
+                        if (user.username) userIdentifiers.push(`@${user.username}`);
+                        userIdentifiers.push(`[${user.chat_id}]`);
+
+                        userStatsMessage += MESSAGE.commands.adminStats.userStats(
+                            userIdentifiers.join(' | '),
+                            totalWater.toFixed(2),
+                            totalOther.toFixed(2)
+                        );
+                    }
+                }
+            }
+
+            if (!hasData) {
+                await telegramService.sendMessage(
+                    chatId,
+                    MESSAGE.commands.adminStats.noData,
+                    KeyboardUtil.getAdminStatsKeyboard(defaultPeriod)
+                );
+                return;
+            }
+
+            const message =
+                MESSAGE.commands.adminStats.today +
+                MESSAGE.commands.adminStats.summary(
+                    users.length,
+                    activeUsers,
+                    totalWaterAll.toFixed(2),
+                    totalOtherAll.toFixed(2)
+                ) +
+                userStatsMessage;
+
             await telegramService.sendMessage(
                 chatId,
-                MESSAGE.commands.adminStats.title,
-                KeyboardUtil.getAdminStatsKeyboard()
+                message,
+                KeyboardUtil.getAdminStatsKeyboard(defaultPeriod)
             );
         } catch (error) {
-            logger.error('Error in handleAdminStats:', error);
-            await telegramService.sendMessage(chatId, MESSAGE.errors.general);
+            logger.error('Error handling admin stats command:', error);
+            await telegramService.sendMessage(
+                chatId,
+                MESSAGE.errors.general,
+                KeyboardUtil.getMainKeyboard()
+            );
         }
     }
 

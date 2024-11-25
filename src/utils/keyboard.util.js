@@ -140,29 +140,39 @@ class KeyboardUtil {
         };
     }
 
-    static getAdminStatsKeyboard() {
+    static getAdminStatsKeyboard(currentPeriod = null) {
+        const periods = [
+            [
+                {
+                    text: KEYBOARD.adminStats.today.text,
+                    callback_data: `adminStats_${KEYBOARD.adminStats.today.id}`,
+                    hide: currentPeriod === KEYBOARD.adminStats.today.id,
+                },
+            ],
+            [
+                {
+                    text: KEYBOARD.adminStats.week.text,
+                    callback_data: `adminStats_${KEYBOARD.adminStats.week.id}`,
+                    hide: currentPeriod === KEYBOARD.adminStats.week.id,
+                },
+            ],
+            [
+                {
+                    text: KEYBOARD.adminStats.month.text,
+                    callback_data: `adminStats_${KEYBOARD.adminStats.month.id}`,
+                    hide: currentPeriod === KEYBOARD.adminStats.month.id,
+                },
+            ],
+        ];
+
         return {
             reply_markup: {
-                inline_keyboard: [
-                    [
-                        {
-                            text: KEYBOARD.adminStats.today.text,
-                            callback_data: `adminStats_${KEYBOARD.adminStats.today.id}`,
-                        },
-                    ],
-                    [
-                        {
-                            text: KEYBOARD.adminStats.week.text,
-                            callback_data: `adminStats_${KEYBOARD.adminStats.week.id}`,
-                        },
-                    ],
-                    [
-                        {
-                            text: KEYBOARD.adminStats.month.text,
-                            callback_data: `adminStats_${KEYBOARD.adminStats.month.id}`,
-                        },
-                    ],
-                ],
+                inline_keyboard: periods
+                    .map((row) =>
+                        row.filter((button) => !button.hide)
+                            .map(({ text, callback_data }) => ({ text, callback_data }))
+                    )
+                    .filter((row) => row.length > 0),
             },
         };
     }

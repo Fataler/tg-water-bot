@@ -315,7 +315,7 @@ class CallbackHandler {
         }
     }
 
-    async handleAdminStatsCallback(chatId, data) {
+    async handleAdminStatsCallback(chatId, data, query) {
         try {
             const period = data.split('_')[1];
             const users = await databaseService.getAllUsers();
@@ -376,30 +376,33 @@ class CallbackHandler {
             }
 
             if (!hasData) {
-                await telegramService.sendMessage(
+                await telegramService.editMessageText(
                     chatId,
+                    query.message.message_id,
                     MESSAGE.commands.adminStats.noData,
-                    KeyboardUtil.getAdminStatsKeyboard()
+                    KeyboardUtil.getAdminStatsKeyboard(period)
                 );
                 return;
             }
 
-            statsMessage += MESSAGE.commands.adminStats.summary(
-                users.length,
-                activeUsers,
-                totalWaterAll.toFixed(2),
-                totalOtherAll.toFixed(2)
-            );
-            statsMessage += userStatsMessage;
-            statsMessage += MESSAGE.separator;
+            const message =
+                statsMessage +
+                MESSAGE.commands.adminStats.summary(
+                    users.length,
+                    activeUsers,
+                    totalWaterAll.toFixed(2),
+                    totalOtherAll.toFixed(2)
+                ) +
+                userStatsMessage;
 
-            await telegramService.sendMessage(
+            await telegramService.editMessageText(
                 chatId,
-                statsMessage,
-                KeyboardUtil.getAdminStatsKeyboard()
+                query.message.message_id,
+                message,
+                KeyboardUtil.getAdminStatsKeyboard(period)
             );
         } catch (error) {
-            logger.error('Error in handleAdminStatsCallback:', error);
+            logger.error('Error handling admin stats callback:', error);
             await telegramService.sendMessage(
                 chatId,
                 MESSAGE.errors.general,
