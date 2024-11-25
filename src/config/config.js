@@ -21,18 +21,15 @@ module.exports = {
         defaultTime: '12:00',
         periods: {
             morning: {
-                start: 8,
-                end: 12,
+                time: '11:00',
                 targetPercent: 30,
             },
             day: {
-                start: 12,
-                end: 18,
+                time: '14:00',
                 targetPercent: 50,
             },
             evening: {
-                start: 18,
-                end: 22,
+                time: '17:00',
                 targetPercent: 20,
             },
         },

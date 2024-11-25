@@ -139,7 +139,6 @@ class NotificationService {
     }
 
     async scheduleUserReminder(user) {
-        // Отменяем существующие напоминания
         this.cancelReminders(user.chat_id);
 
         if (!user.notification_enabled) {
@@ -147,16 +146,34 @@ class NotificationService {
             return;
         }
 
-        const times = ['11:00', '14:00', '17:00'];
+        const { periods } = config.notifications;
         const jobs = [];
 
-        times.forEach((time) => {
-            const [hours, minutes] = time.split(':').map(Number);
-            this.logger.info(`Scheduling reminder for user ${user.id} at ${time}`);
+        const periodEntries = Object.entries(periods);
+        periodEntries.forEach(([periodName, periodConfig], index) => {
+            const [hours, minutes] = periodConfig.time.split(':').map(Number);
+            this.logger.info(
+                `Scheduling reminder for user ${user.id} at ${periodConfig.time} (${periodName})`
+            );
 
             const job = schedule.scheduleJob({ hour: hours, minute: minutes }, async () => {
                 try {
-                    await this.sendWaterReminder(user);
+                    const todayStats = await this.dbService.getDailyWaterIntake(user.id);
+                    const currentIntake = todayStats.total;
+                    const goal = user.daily_goal;
+                    const currentProgress = (currentIntake / goal) * 100;
+
+                    const expectedProgress = periodEntries
+                        .slice(0, index + 1)
+                        .reduce((sum, [, period]) => sum + period.targetPercent, 0);
+
+                    if (currentProgress < expectedProgress) {
+                        await this.sendWaterReminder(user);
+                    } else {
+                        this.logger.info(
+                            `Skipping reminder for user ${user.chat_id} - target percent reached for ${periodName}`
+                        );
+                    }
                 } catch (error) {
                     this.logger.error(`Error sending notification to user ${user.chat_id}:`, error);
                 }
@@ -164,7 +181,6 @@ class NotificationService {
             jobs.push(job);
         });
 
-        // Store all jobs for this user
         this.jobs.set(user.chat_id, jobs);
         this.logger.info(`Scheduled ${jobs.length} reminders for user ${user.chat_id}`);
     }
