@@ -116,11 +116,11 @@ const MESSAGE = {
         formatDailyProgress: (total, goal) => {
             const percent = goal ? ValidationUtil.formatPercentage(total, goal) : 0;
             const progressEmoji = percent >= 100 ? '🌟' : '💪';
-            let message = `🎯 Дневная цель: ${goal}л\n`;
+            let message = `💧 Всего: ${goal}л\n`;
 
             if (percent < 100) {
                 const remaining = (goal - total).toFixed(2);
-                message += `💧 Осталось выпить: ${remaining}л\n`;
+                message += `💧 Осталось: ${remaining}л\n`;
             }
 
             message += `\n${ValidationUtil.createProgressBar(total, goal)} ${percent}%\n`;
