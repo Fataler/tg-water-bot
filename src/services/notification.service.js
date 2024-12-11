@@ -3,6 +3,7 @@ const config = require('../config/config');
 const telegramService = require('./telegram.service');
 const dbService = require('./database.service');
 const KeyboardUtil = require('../utils/keyboard.util');
+const TimeUtil = require('../utils/time.util');
 const MESSAGE = require('../config/message.config');
 const logger = require('../config/logger.config');
 
@@ -21,6 +22,8 @@ class NotificationService {
                 const user = await dbService.getUser(chatId);
                 if (user) {
                     this.scheduleUserReminder(user);
+                } else {
+                    logger.warn(`User ${chatId} not found`);
                 }
             } else {
                 logger.info('Scheduling reminders for all users');
@@ -52,7 +55,7 @@ class NotificationService {
     }
 
     getCurrentPeriod() {
-        const hour = new Date().getHours();
+        const hour = TimeUtil.getCurrentHour();
         const { periods } = config.notifications;
 
         if (hour >= periods.morning.start && hour < periods.morning.end) return 'morning';
@@ -62,33 +65,39 @@ class NotificationService {
     }
 
     async shouldSendNotification(user, dailyIntake) {
-        const now = new Date();
         const period = this.getCurrentPeriod();
 
-        // Не отправляем уведомления ночью
         if (!period) {
             return false;
         }
 
         if (dailyIntake.total >= user.daily_goal) {
+            this.logger.info(
+                `User ${user.chat_id} has reached daily goal: ${dailyIntake.total}/${user.daily_goal}`
+            );
+            return false;
+        }
+
+        const currentProgress = (dailyIntake.total / user.daily_goal) * 100;
+        const expectedProgress = this.getExpectedProgress(period);
+
+        if (currentProgress >= expectedProgress) {
+            this.logger.info(
+                `User ${user.chat_id} has reached target for period ${period}: ${currentProgress}% >= ${expectedProgress}%`
+            );
             return false;
         }
 
         if (user.last_notification) {
             const lastNotification = new Date(user.last_notification * 1000);
-            const timeSinceLastNotification = now - lastNotification;
+            const timeSinceLastNotification = TimeUtil.getCurrentTime() - lastNotification;
 
             if (timeSinceLastNotification < config.notifications.limits.minInterval) {
                 return false;
             }
         }
 
-        // Проверяем прогресс в текущем периоде
-        const currentProgress = (dailyIntake.total / user.daily_goal) * 100;
-        const expectedProgress = this.getExpectedProgress(period);
-
-        const shouldSend = currentProgress < expectedProgress;
-        return shouldSend;
+        return true;
     }
 
     getExpectedProgress(period) {
@@ -103,12 +112,12 @@ class NotificationService {
 
         const periodConfig = periods[period];
         const periodLength = periodConfig.end - periodConfig.start;
-        const currentHour = new Date().getHours();
+        const currentHour = TimeUtil.getCurrentHour();
         const hoursIntoPeriod = currentHour - periodConfig.start;
-        const periodProgress = hoursIntoPeriod / periodLength;
+        const periodProgress = Math.max(0, Math.min(1, hoursIntoPeriod / periodLength));
 
         expected += periodConfig.targetPercent * periodProgress;
-        return expected;
+        return Math.min(100, expected);
     }
 
     async sendWaterReminder(user) {
@@ -128,7 +137,7 @@ class NotificationService {
             });
 
             await this.dbService.updateUser(user.chat_id, {
-                last_notification: Math.floor(Date.now() / 1000),
+                last_notification: TimeUtil.toUnixTimestamp(TimeUtil.getCurrentTime()),
             });
 
             return true;
@@ -139,50 +148,53 @@ class NotificationService {
     }
 
     async scheduleUserReminder(user) {
-        this.cancelReminders(user.chat_id);
+        try {
+            this.cancelReminders(user.chat_id);
 
-        if (!user.notification_enabled) {
-            this.logger.info(`Notifications disabled for user ${user.id}`);
-            return;
-        }
+            if (!user.notification_enabled) {
+                this.logger.info(`Notifications disabled for user ${user.id}`);
+                return;
+            }
 
-        const { periods } = config.notifications;
-        const jobs = [];
+            const { periods } = config.notifications;
+            const jobs = [];
 
-        const periodEntries = Object.entries(periods);
-        periodEntries.forEach(([periodName, periodConfig], index) => {
-            const [hours, minutes] = periodConfig.time.split(':').map(Number);
-            this.logger.info(
-                `Scheduling reminder for user ${user.id} at ${periodConfig.time} (${periodName})`
-            );
+            Object.entries(periods).forEach(([periodName, periodConfig]) => {
+                const [hours, minutes] = periodConfig.time.split(':').map(Number);
+                this.logger.info(
+                    `Scheduling reminder for user ${user.id} at ${periodConfig.time} (${periodName})`
+                );
 
-            const job = schedule.scheduleJob({ hour: hours, minute: minutes }, async () => {
-                try {
-                    const todayStats = await this.dbService.getDailyWaterIntake(user.id);
-                    const currentIntake = todayStats.total;
-                    const goal = user.daily_goal;
-                    const currentProgress = (currentIntake / goal) * 100;
+                const job = schedule.scheduleJob({ hour: hours, minute: minutes }, async () => {
+                    try {
+                        const todayStats = await this.dbService.getDailyWaterIntake(user.id);
+                        const currentIntake = todayStats.total;
+                        const goal = user.daily_goal;
+                        const currentProgress = (currentIntake / goal) * 100;
+                        const expectedProgress = this.getExpectedProgress(periodName);
 
-                    const expectedProgress = periodEntries
-                        .slice(0, index + 1)
-                        .reduce((sum, [, period]) => sum + period.targetPercent, 0);
-
-                    if (currentProgress < expectedProgress) {
-                        await this.sendWaterReminder(user);
-                    } else {
-                        this.logger.info(
-                            `Skipping reminder for user ${user.chat_id} - target percent reached for ${periodName}`
+                        if (currentProgress < expectedProgress) {
+                            await this.sendWaterReminder(user);
+                        } else {
+                            this.logger.info(
+                                `Skipping reminder for user ${user.chat_id} - target percent reached for ${periodName}`
+                            );
+                        }
+                    } catch (error) {
+                        this.logger.error(
+                            `Error sending notification to user ${user.chat_id}:`,
+                            error
                         );
                     }
-                } catch (error) {
-                    this.logger.error(`Error sending notification to user ${user.chat_id}:`, error);
-                }
+                });
+                jobs.push(job);
             });
-            jobs.push(job);
-        });
 
-        this.jobs.set(user.chat_id, jobs);
-        this.logger.info(`Scheduled ${jobs.length} reminders for user ${user.chat_id}`);
+            this.jobs.set(user.chat_id, jobs);
+            this.logger.info(`Scheduled ${jobs.length} reminders for user ${user.chat_id}`);
+        } catch (error) {
+            this.logger.error(`Error scheduling reminders for user ${user.chat_id}:`, error);
+        }
     }
 }
 

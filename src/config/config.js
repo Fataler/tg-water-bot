@@ -18,19 +18,25 @@ module.exports = {
     notifications: {
         retryAttempts: 3,
         retryDelay: 1000,
-        defaultTime: '12:00',
+        timezone: 'Europe/Moscow',
         periods: {
             morning: {
-                time: '11:00',
+                time: '12:00',
+                start: 8,
+                end: 12,
                 targetPercent: 30,
             },
             day: {
-                time: '14:00',
-                targetPercent: 50,
+                time: '16:00',
+                start: 12,
+                end: 17,
+                targetPercent: 45,
             },
             evening: {
-                time: '17:00',
-                targetPercent: 20,
+                time: '19:00',
+                start: 17,
+                end: 22,
+                targetPercent: 25,
             },
         },
         limits: {
