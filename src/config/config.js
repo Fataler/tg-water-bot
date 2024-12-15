@@ -21,19 +21,19 @@ module.exports = {
         timezone: 'Europe/Moscow',
         periods: {
             morning: {
-                time: '12:00',
+                time: '09:00',
                 start: 8,
                 end: 12,
                 targetPercent: 30,
             },
             day: {
-                time: '16:00',
+                time: '13:00',
                 start: 12,
                 end: 17,
                 targetPercent: 45,
             },
             evening: {
-                time: '19:00',
+                time: '16:00',
                 start: 17,
                 end: 22,
                 targetPercent: 25,

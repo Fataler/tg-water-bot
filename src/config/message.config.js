@@ -115,7 +115,6 @@ const MESSAGE = {
         all: '📊 Статистика за все время',
         formatDailyProgress: (total, goal) => {
             const percent = goal ? ValidationUtil.formatPercentage(total, goal) : 0;
-            const progressEmoji = percent >= 100 ? '🌟' : '💪';
             let message = `💧 Всего: ${goal}л\n`;
 
             if (percent < 100) {
@@ -125,7 +124,23 @@ const MESSAGE = {
 
             message += `\n${ValidationUtil.createProgressBar(total, goal)} ${percent}%\n`;
 
-            message += `\n${progressEmoji} ${percent >= 100 ? 'Дневная цель достигнута! Молодец!' : 'Продолжай в том же духе!'}`;
+            let progressMessage = '';
+
+            if (percent === 0) {
+                progressMessage = '💧 Самое время пойти выпить воды! 🚰';
+            } else if (percent >= 100) {
+                progressMessage = '🎉 Дневная цель достигнута! Молодец! 🏆';
+            } else if (percent >= 75) {
+                progressMessage = '🎯 Уже совсем близко к цели! 💫';
+            } else if (percent >= 50) {
+                progressMessage = '🚀 Ты на полпути! Так держать! ⭐';
+            } else if (percent >= 25) {
+                progressMessage = '✨ Хороший старт! Продолжай в том же духе! 💫';
+            } else {
+                progressMessage = '💪 Каждый глоток приближает к цели! 🎯';
+            }
+
+            message += `\n${progressMessage}`;
             return message;
         },
         message: (title, stats, period, goal) => {
