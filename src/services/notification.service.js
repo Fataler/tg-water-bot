@@ -13,6 +13,7 @@ class NotificationService {
         this.telegramService = telegramService;
         this.logger = logger;
         this.jobs = new Map();
+        this.usedMessages = new Map();
     }
 
     async scheduleReminders(chatId = null) {
@@ -127,7 +128,24 @@ class NotificationService {
 
         if (currentIntake < goal) {
             const messages = MESSAGE.notifications.reminder.messages;
-            const randomMessage = messages[Math.floor(Math.random() * messages.length)];
+            
+            if (!this.usedMessages.has(user.chat_id)) {
+                this.usedMessages.set(user.chat_id, []);
+            }
+
+            const userUsedMessages = this.usedMessages.get(user.chat_id);
+            
+            if (userUsedMessages.length === messages.length) {
+                userUsedMessages.length = 0;
+            }
+            
+            const availableIndices = messages.map((_, index) => index)
+                .filter(index => !userUsedMessages.includes(index));
+            
+            const randomIndex = availableIndices[Math.floor(Math.random() * availableIndices.length)];
+            userUsedMessages.push(randomIndex);
+            
+            const randomMessage = messages[randomIndex];
             const progressMessage = MESSAGE.stats.formatDailyProgress(currentIntake, goal);
             const fullMessage = `${randomMessage}\n${progressMessage}`;
 
